@@ -1,5 +1,6 @@
 # 财报 PDF 数据结构化 + LangGraph 财报问数 Agent
 
+当前版本：V1.0
 一个把上市公司财报 PDF 转成 PostgreSQL 结构化财务表，并用 LangGraph 构建受控财务问数 Agent 的端到端项目。
 
 ## 竞赛背景
@@ -288,7 +289,7 @@ print(result["final_answer"])
 
 ## 多轮上下文
 
-V0.7 多轮上下文不是让 LLM 记忆整段对话，而是基于 QueryPlan 做受控合并。
+多轮上下文不是让 LLM 记忆整段对话，而是基于 QueryPlan 做受控合并。
 
 - `clarification_answer`：用户在回答上一轮澄清问题，例如系统问“请明确公司”，用户答“华润三九”。
 - `contextual_followup`：用户基于上一轮成功查询继续追问，例如“那净利润呢？”、“换成云南白药呢？”。
@@ -355,7 +356,7 @@ python -m pytest tests
 - [docs/data_catalog.md](docs/data_catalog.md)：数据库范围、公司覆盖和指标覆盖说明。
 - [docs/extraction_summary.md](docs/extraction_summary.md)：财报 PDF 数据提取总结。
 - [docs/agent_workflow.md](docs/agent_workflow.md)：Agent 执行链路说明。
-- [docs/v0.7_context_summary.md](docs/v0.7_context_summary.md)：V0.7 多轮上下文总结。
+- [docs/multiturn_context_design.md](docs/multiturn_context_design.md)：多轮上下文设计总结。
 - [docs/demo_cases.md](docs/demo_cases.md)：展示案例。
 
 ## GitHub 数据策略
@@ -384,3 +385,15 @@ python -m pytest tests
 - Agent 不支持任意 SQL 问答，也不支持自然语言转 SQL fallback。
 - 不支持的 intent、缺失槽位或歧义输入会进入澄清或拒答。
 - 原始 PDF、数据库和大型运行产物需要在本地环境准备。
+
+## 版本说明
+
+当前公开版本为 **V1.0**，定位为端到端可展示版本，包含：
+
+- 财报 PDF 结构化抽取流程；
+- PostgreSQL 财务数据底座；
+- 字段级 lineage 与质量校验；
+- LangGraph 财报问数 Agent；
+- QueryPlan、公司标准化、指标映射、槽位校验；
+- 模板 SQL 生成、执行前校验与只读查询；
+- 单点查询、趋势、同比、派生指标、公司对比、排名和多轮追问。

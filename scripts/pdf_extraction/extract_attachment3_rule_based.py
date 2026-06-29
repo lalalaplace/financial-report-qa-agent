@@ -3424,7 +3424,7 @@ def choose_rule_stage(candidates: List[Dict]) -> Tuple[str, Optional[Dict], Dict
         return "rule", top1, meta
     if top1_confidence >= AUTO_FILL_MIN_CONFIDENCE and gap >= AUTO_FILL_MIN_GAP:
         return "candidate_fill", top1, meta
-    return "needs_rerank", None, meta
+    return "needs_rule_fallback", None, meta
 
 
 def get_candidate_source_row_id(candidate: Dict) -> Optional[int]:

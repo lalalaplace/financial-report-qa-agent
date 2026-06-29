@@ -1,4 +1,4 @@
-"""V0.7 上下文 LLM 节点真实 LLM 集成测试（第 2/5 节补充覆盖）。"""
+"""多轮上下文上下文 LLM 节点真实 LLM 集成测试（第 2/5 节补充覆盖）。"""
 
 from __future__ import annotations
 

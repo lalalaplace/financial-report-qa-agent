@@ -1,4 +1,4 @@
-"""V0.7 上下文续问真实 LLM 流程测试。"""
+"""多轮上下文上下文续问真实 LLM 流程测试。"""
 
 from __future__ import annotations
 

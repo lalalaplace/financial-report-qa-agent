@@ -1,4 +1,4 @@
-"""V0.7 contextual_followup 生成下一轮 QueryPlan draft 的回归测试。"""
+"""多轮上下文 contextual_followup 生成下一轮 QueryPlan draft 的回归测试。"""
 
 from __future__ import annotations
 

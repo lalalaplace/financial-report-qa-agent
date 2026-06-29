@@ -442,7 +442,7 @@ python -m pytest tests
 如需按历史版本分组运行当前仍保留的回归测试，可以使用：
 
 ```bat
-python scripts\run_v06_test_suite.py
+python tests\run_v06_test_suite.py
 ```
 
 早期 V0.4/V0.5 的独立脚本没有随 clean repo 发布，历史场景已合并到当前 `tests/` 下的正式测试。

@@ -1,4 +1,4 @@
-"""V0.7 多轮状态管理真实 LLM 测试。"""
+"""多轮上下文多轮状态管理真实 LLM 测试。"""
 
 from __future__ import annotations
 
