@@ -1,0 +1,232 @@
+{
+  "total_operating_revenue": {
+    "metric_name": "营业收入",
+    "metric_type": "base",
+    "table": "income_sheet",
+    "field": "total_operating_revenue",
+    "unit": "yuan",
+    "aliases": ["营业收入", "营业总收入", "营收", "收入"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "利润表中的营业收入或营业总收入字段"
+  },
+  "operating_profit": {
+    "metric_name": "营业利润",
+    "metric_type": "base",
+    "table": "income_sheet",
+    "field": "operating_profit",
+    "unit": "yuan",
+    "aliases": ["营业利润", "经营利润"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "利润表中的营业利润字段"
+  },
+  "total_profit": {
+    "metric_name": "利润总额",
+    "metric_type": "base",
+    "table": "income_sheet",
+    "field": "total_profit",
+    "unit": "yuan",
+    "aliases": ["利润总额", "利润合计"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "利润表中的利润总额字段"
+  },
+  "net_profit": {
+    "metric_name": "净利润",
+    "metric_type": "base",
+    "table": "income_sheet",
+    "field": "net_profit",
+    "unit": "yuan",
+    "aliases": ["净利润", "利润净额", "归母净利润"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "利润表中的净利润字段，当前用于回答常见利润查询"
+  },
+  "asset_total_assets": {
+    "metric_name": "总资产",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "asset_total_assets",
+    "unit": "yuan",
+    "aliases": ["总资产", "资产总计", "资产合计", "资产总额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的资产总计字段"
+  },
+  "liability_total_liabilities": {
+    "metric_name": "总负债",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "liability_total_liabilities",
+    "unit": "yuan",
+    "aliases": ["总负债", "负债合计", "负债总计", "负债总额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的负债合计字段"
+  },
+  "equity_total_equity": {
+    "metric_name": "所有者权益合计",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "equity_total_equity",
+    "unit": "yuan",
+    "aliases": ["所有者权益合计", "股东权益合计", "权益合计", "所有者权益", "股东权益"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的所有者权益或股东权益合计字段"
+  },
+  "liability_and_equity_total": {
+    "metric_name": "负债和所有者权益总计",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "liability_and_equity_total",
+    "unit": "yuan",
+    "aliases": ["负债和所有者权益总计", "负债及所有者权益总计", "负债和股东权益总计", "负债及股东权益总计"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的负债和所有者权益总计字段"
+  },
+  "asset_cash_and_cash_equivalents": {
+    "metric_name": "货币资金",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "asset_cash_and_cash_equivalents",
+    "unit": "yuan",
+    "aliases": ["货币资金", "现金及现金等价物", "现金及现金等价物余额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的货币资金字段"
+  },
+  "asset_accounts_receivable": {
+    "metric_name": "应收账款",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "asset_accounts_receivable",
+    "unit": "yuan",
+    "aliases": ["应收账款", "应收账款净额", "应收账款余额", "应收账款账面价值"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的应收账款字段"
+  },
+  "asset_inventory": {
+    "metric_name": "存货",
+    "metric_type": "base",
+    "table": "balance_sheet",
+    "field": "asset_inventory",
+    "unit": "yuan",
+    "aliases": ["存货", "存货净额", "存货余额", "存货账面价值"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "资产负债表中的存货字段"
+  },
+  "operating_cf_net_amount": {
+    "metric_name": "经营活动现金流量净额",
+    "metric_type": "base",
+    "table": "cash_flow_sheet",
+    "field": "operating_cf_net_amount",
+    "unit": "yuan",
+    "aliases": ["经营现金流", "经营性现金流", "经营活动现金流", "经营活动现金流量净额", "经营活动产生的现金流量净额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "现金流量表中的经营活动产生的现金流量净额字段"
+  },
+  "investing_cf_net_amount": {
+    "metric_name": "投资活动现金流量净额",
+    "metric_type": "base",
+    "table": "cash_flow_sheet",
+    "field": "investing_cf_net_amount",
+    "unit": "yuan",
+    "aliases": ["投资现金流", "投资活动现金流", "投资活动现金流量净额", "投资活动产生的现金流量净额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "现金流量表中的投资活动产生的现金流量净额字段"
+  },
+  "financing_cf_net_amount": {
+    "metric_name": "筹资活动现金流量净额",
+    "metric_type": "base",
+    "table": "cash_flow_sheet",
+    "field": "financing_cf_net_amount",
+    "unit": "yuan",
+    "aliases": ["筹资现金流", "融资现金流", "筹资活动现金流", "筹资活动现金流量净额", "筹资活动产生的现金流量净额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "现金流量表中的筹资活动产生的现金流量净额字段"
+  },
+  "net_cash_flow": {
+    "metric_name": "现金及现金等价物净增加额",
+    "metric_type": "base",
+    "table": "cash_flow_sheet",
+    "field": "net_cash_flow",
+    "unit": "yuan",
+    "aliases": ["现金及现金等价物净增加额", "现金净增加额", "现金流量净额", "现金及现金等价物增加额"],
+    "query_types": ["single_metric_query", "trend_query", "yoy_query", "company_compare_query"],
+    "description": "现金流量表中的现金及现金等价物净增加额字段"
+  },
+  "debt_to_asset_ratio": {
+    "metric_name": "资产负债率",
+    "metric_type": "derived",
+    "table": "",
+    "field": "",
+    "unit": "percent",
+    "scale": 100,
+    "precision": 2,
+    "aliases": ["资产负债率", "负债率", "杠杆率", "资产负债比率"],
+    "query_types": ["derived_metric_query", "trend_query", "yoy_query"],
+    "formula": {
+      "numerator": "liability_total_liabilities",
+      "denominator": "asset_total_assets"
+    },
+    "description": "总负债 / 总资产 × 100%，反映企业负债水平及财务杠杆"
+  },
+  "net_profit_margin": {
+    "metric_name": "净利率",
+    "metric_type": "derived",
+    "table": "",
+    "field": "",
+    "unit": "percent",
+    "scale": 100,
+    "precision": 2,
+    "aliases": ["净利率", "销售净利率", "净利润率"],
+    "query_types": ["derived_metric_query", "trend_query", "yoy_query"],
+    "formula": {
+      "numerator": "net_profit",
+      "denominator": "total_operating_revenue"
+    },
+    "description": "净利润 / 营业收入 × 100%，反映企业盈利能力"
+  },
+  "roe": {
+    "metric_name": "净资产收益率",
+    "metric_type": "derived",
+    "table": "",
+    "field": "",
+    "unit": "percent",
+    "scale": 100,
+    "precision": 2,
+    "aliases": ["ROE", "净资产收益率", "股东权益报酬率", "净资产回报率"],
+    "query_types": ["derived_metric_query", "trend_query", "yoy_query"],
+    "formula": {
+      "numerator": "net_profit",
+      "denominator": "equity_total_equity"
+    },
+    "description": "净利润 / 所有者权益 × 100%，反映股东权益的收益水平"
+  },
+  "roa": {
+    "metric_name": "总资产收益率",
+    "metric_type": "derived",
+    "table": "",
+    "field": "",
+    "unit": "percent",
+    "scale": 100,
+    "precision": 2,
+    "aliases": ["ROA", "总资产收益率", "资产收益率", "资产回报率", "总资产报酬率"],
+    "query_types": ["derived_metric_query", "trend_query", "yoy_query"],
+    "formula": {
+      "numerator": "net_profit",
+      "denominator": "asset_total_assets"
+    },
+    "description": "净利润 / 总资产 × 100%，反映企业资产综合利用效果"
+  },
+  "operating_cf_to_net_profit": {
+    "metric_name": "经营现金流净利比",
+    "metric_type": "derived",
+    "table": "",
+    "field": "",
+    "unit": "ratio",
+    "scale": 1,
+    "precision": 2,
+    "aliases": ["经营现金流净利比", "经营现金流与净利润比", "现金流净利比", "经营现金流/净利润"],
+    "query_types": ["derived_metric_query", "trend_query", "yoy_query"],
+    "formula": {
+      "numerator": "operating_cf_net_amount",
+      "denominator": "net_profit"
+    },
+    "description": "经营活动现金流量净额 / 净利润，反映盈利质量"
+  }
+}

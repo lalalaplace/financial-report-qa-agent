@@ -1,0 +1,48 @@
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# 虚拟环境
+.venv/
+venv/
+env/
+
+# 本地配置和密钥
+.env
+.env.*
+!.env.example
+
+# 原始数据、真实附件和运行产物
+input/
+output/
+logs/
+示例数据/
+*.pdf
+*.xlsx
+*.xls
+*.jsonl
+
+# 数据库和中间文件
+*.db
+*.sqlite
+*.sqlite3
+*.duckdb
+*.db-journal
+*.parquet
+*.tmp
+*.bak
+
+# 旧版或本地整理目录
+github_clean_repo/
+github_ready_repo/
+.claude/
+
+# 编辑器和系统文件
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
