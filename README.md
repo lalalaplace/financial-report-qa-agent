@@ -1,6 +1,7 @@
 # 财报 PDF 数据结构化 + LangGraph 财报问数 Agent
 
-当前版本：V1.0
+当前版本：V1.1
+
 一个把上市公司财报 PDF 转成 PostgreSQL 结构化财务表，并用 LangGraph 构建受控财务问数 Agent 的端到端项目。
 
 ## 竞赛背景
@@ -16,80 +17,8 @@
 - 自然语言先转为结构化 `QueryPlan`，再经过公司标准化、指标映射、槽位校验和固定 SQL 节点。
 - SQL 执行前经过 SQL Guard，只允许受控只读查询。
 - 支持单点查询、趋势、同比、派生指标、公司对比、排名、排名位置和多轮追问。
+- 支持受控 LLM 补充解读，在确定性答案之后补充趋势形态、解释边界和后续分析方向。
 - 支持字段级 lineage、抽取覆盖率、运行摘要和财务一致性校验。
-
-## 系统架构图
-
-```mermaid
-flowchart LR
-    %% ========== 离线数据生产 ==========
-    subgraph Offline["离线数据生产：财报 PDF 结构化"]
-        direction TB
-        PDF["财报 PDF"]
-        Scan["文件扫描<br/>元数据识别"]
-        Locate["页面解析<br/>报表定位"]
-        Extract["规则抽取<br/>字段标准化"]
-        Check["覆盖率统计<br/>一致性校验"]
-        Load["写入最终表"]
-
-        PDF --> Scan --> Locate --> Extract --> Check --> Load
-    end
-
-    %% ========== 数据库底座 ==========
-    subgraph Data["结构化财务数据库（PostgreSQL）"]
-        direction TB
-        Company["公司维表<br/>公司别名"]
-        Metric["指标字典<br/>字段映射"]
-        Report["三大财务报表<br/>资产负债表 / 利润表 / 现金流量表"]
-        Trace["字段血缘<br/>来源页码 / 抽取证据 / 质量记录"]
-    end
-
-    %% ========== 在线问数 ==========
-    subgraph Online["在线问数服务：LangGraph 受控问数"]
-        direction TB
-        User["用户问题"]
-        Plan["结构化查询计划<br/>意图 / 公司 / 指标 / 时间"]
-        Normalize["公司标准化<br/>指标映射"]
-        Slot["槽位校验<br/>澄清与多轮追问"]
-        SQLGen["固定 SQL 生成"]
-        Guard["SQL 安全检查<br/>只读 / 白名单 / 行数限制"]
-        Exec["只读执行器"]
-        Answer["结果分析<br/>回答生成"]
-        Result["可追溯财务回答"]
-
-        User --> Plan --> Normalize --> Slot --> SQLGen --> Guard --> Exec --> Answer --> Result
-    end
-
-    %% ========== 跨模块关系 ==========
-    Load --> Report
-    Load --> Trace
-
-    Metric -. 抽取字段标准 .-> Extract
-    Company -. 公司信息 .-> Normalize
-    Metric -. 指标口径 .-> Normalize
-
-    Report --> Exec
-    Company --> Exec
-    Trace -. 结果追溯 .-> Answer
-
-    %% ========== 样式 ==========
-    classDef source fill:#FFF7ED,stroke:#FDBA74,stroke-width:1.2px,color:#7C2D12;
-    classDef offline fill:#EFF6FF,stroke:#93C5FD,stroke-width:1.2px,color:#1E3A8A;
-    classDef database fill:#F0FDF4,stroke:#86EFAC,stroke-width:1.2px,color:#14532D;
-    classDef online fill:#F5F3FF,stroke:#C4B5FD,stroke-width:1.2px,color:#4C1D95;
-    classDef output fill:#FEFCE8,stroke:#FACC15,stroke-width:1.4px,color:#713F12;
-
-    class PDF,User source;
-    class Scan,Locate,Extract,Check,Load offline;
-    class Company,Metric,Report,Trace database;
-    class Plan,Normalize,Slot,SQLGen,Guard,Exec,Answer online;
-    class Result output;
-
-    style Offline fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.5px,color:#0F172A;
-    style Data fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.5px,color:#0F172A;
-    style Online fill:#F8FAFC,stroke:#CBD5E1,stroke-width:1.5px,color:#0F172A;
-
-```
 
 ## Demo
 
@@ -119,7 +48,13 @@ Agent：根据数据库查询结果，华润三九医药股份有限公司 2024 
 用户：华润三九 2024 年净利润排名
 Agent：华润三九 2024 年净利润为 37.78 亿元，从高到低排名第 2 / 62。
 
-按名次位置看，华润三九处于前 10% 区间，属于前 25%。
+按名次位置看，华润三九位于前 10% 区间。
+
+补充解读：
+排名仅覆盖当前数据库中该年份、报告期和指标非空的公司样本。
+
+可继续分析：
+可查询华润三九近3年净利润排名变化趋势，或对比排名第1和第3公司的当期净利润数据。
 ```
 
 ### 跟踪模式
@@ -159,6 +94,13 @@ Trace 模式适合展示 Agent 执行链路：
 
 营业收入为 276.17 亿元，2023 年为 247.39 亿元，同比增加 28.78 亿元，同比增速为 11.63%。
 
+补充解读：
+本次同比仅基于2023和2024两个完整财年，无法判断营业收入的中长期趋势或增长可持续性，需结合更多历史期间观察。
+同比仅反映相邻两个报告期之间的变化，不能推断长期趋势、周期性或未来表现，也不代表公司整体经营质量。
+
+可继续分析：
+建议查看华润三九近3-4年营业收入及同比增速趋势，也可并列对比同期净利润、净利率等结果性指标。
+
 用户：云南白药呢
 [route] contextual_followup
 [intent] yoy_query
@@ -171,6 +113,11 @@ Trace 模式适合展示 Agent 执行链路：
 
 营业收入为 400.33 亿元，2023 年为 391.11 亿元，同比增加 9.22 亿元，同比增速为 2.36%。
 
+补充解读：
+同比仅基于相邻两个报告期，不能判断中长期趋势、持续性或变化原因。
+
+可继续分析：
+建议查看近3-4年营业收入同比趋势，或并列对比净利润、净利率等盈利指标。
 ```
 
 ### 示例问题
@@ -225,6 +172,7 @@ Trace 模式适合展示 Agent 执行链路：
 | 指定公司排名位置 | `rank_position_query` | `华润三九 2024 年营业收入排第几？` |
 | 缺槽位澄清 | clarification | `2024 年营业收入是多少？` |
 | 多轮追问 | contextual follow-up | `那净利润呢？`、`换成云南白药呢？` |
+| LLM 补充解读 | `llm_insight_node` | 成功查询后补充解释边界、趋势形态或样本口径 |
 
 ## 为什么不直接使用 Text-to-SQL？
 
@@ -240,7 +188,7 @@ Trace 模式适合展示 Agent 执行链路：
 - SQL Guard：执行前检查只读语句、禁止关键字、表白名单、函数白名单和 LIMIT。
 - 只读执行：数据库入口集中在 `db/readonly_executor.py`，拒绝写操作、多语句和危险函数。
 
-因此，LLM 只负责输出 `QueryPlan`、上下文 `route` 或 `slot_patch`，不直接写 SQL。
+因此，LLM 只负责输出 `QueryPlan`、上下文 `route`、`slot_patch` 或结果补充洞察，不直接写 SQL，不修改查询结果，也不重新计算财务数值。
 
 ## 两个主要模块
 
@@ -276,6 +224,7 @@ run_pipeline.bat
 - 按 intent 路由到固定 SQL 生成节点。
 - 执行 SQL Guard 和只读查询。
 - 分析查询结果并生成中文回答。
+- 在主答案生成后调用 `llm_insight_node` 生成补充解读；该节点只基于 `query_result`、`analysis_result` 和主答案，不参与 SQL、数值计算和成功失败判断。
 - 支持多轮上下文补答和追问。
 
 最小调用：
@@ -289,7 +238,7 @@ print(result["final_answer"])
 
 ## 多轮上下文
 
-多轮上下文不是让 LLM 记忆整段对话，而是基于 QueryPlan 做受控合并。
+多轮上下文的实现是基于 QueryPlan 做受控合并。
 
 - `clarification_answer`：用户在回答上一轮澄清问题，例如系统问“请明确公司”，用户答“华润三九”。
 - `contextual_followup`：用户基于上一轮成功查询继续追问，例如“那净利润呢？”、“换成云南白药呢？”。
@@ -304,27 +253,6 @@ print(result["final_answer"])
 合并后仍必须重新走公司标准化、指标映射、槽位校验、SQL 生成、SQL Guard 和只读执行。
 
 ## 快速开始
-
-### 安装依赖和配置环境
-
-```bat
-pip install -r requirements.txt
-copy .env.example .env
-```
-
-在 `.env` 中配置 PostgreSQL 和本地数据目录即可运行 PDF 抽取流程。只有运行 Agent 的真实 LLM 节点或集成测试时，才需要额外配置 Agent 模型服务。数据库与安全配置示例见 [docs/database_initialization.md](docs/database_initialization.md) 和 [docs/security.md](docs/security.md)。
-
-### PDF 结构化流程
-
-```bat
-run_pipeline.bat
-```
-
-或直接运行：
-
-```bat
-python scripts\pdf_extraction\run_pipeline.py
-```
 
 ### Agent 命令行
 
@@ -346,18 +274,21 @@ python -m pytest tests
 
 ### 完整流程复现
 
-完整 PDF 抽取流程、SQL 文件清单、lineage 查询和质量校验见 [docs/extraction_summary.md](docs/extraction_summary.md)，数据库初始化见 [docs/database_initialization.md](docs/database_initialization.md)。
+完整 PDF 抽取流程、数据库初始化、SQL 文件清单、lineage 查询、质量校验和历史验收命令见 [docs/extraction_summary.md](docs/extraction_summary.md)。
 
 ## 文档
 
 - [docs/architecture.md](docs/architecture.md)：系统架构说明。
-- [docs/database_initialization.md](docs/database_initialization.md)：数据库初始化和账号建议。
-- [docs/security.md](docs/security.md)：安全边界、配置策略和上传前检查。
 - [docs/data_catalog.md](docs/data_catalog.md)：数据库范围、公司覆盖和指标覆盖说明。
 - [docs/extraction_summary.md](docs/extraction_summary.md)：财报 PDF 数据提取总结。
 - [docs/agent_workflow.md](docs/agent_workflow.md)：Agent 执行链路说明。
-- [docs/multiturn_context_design.md](docs/multiturn_context_design.md)：多轮上下文设计总结。
+- [docs/v0.7_context_summary.md](docs/v0.7_context_summary.md)：多轮上下文总结。
 - [docs/demo_cases.md](docs/demo_cases.md)：展示案例。
+- [docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)：仓库目录说明。
+
+## 仓库结构
+
+仓库目录职责和 deprecated 脚本说明见 [docs/REPOSITORY_LAYOUT.md](docs/REPOSITORY_LAYOUT.md)。
 
 ## GitHub 数据策略
 
@@ -370,9 +301,8 @@ python -m pytest tests
 - 缓存：`__pycache__/`、`.pytest_cache/`
 - 本地环境变量：`.env`
 - 大体积样例数据：`示例数据/`
-- 原始 Excel 附件和数据库文件
 
-仓库只保留代码、SQL、轻量配置、文档、测试和 demo。运行项目需要在本地准备 PDF、PostgreSQL 和 `.env` 配置。
+仓库只保留代码、SQL、轻量配置和文档。运行项目需要在本地准备 PDF、PostgreSQL 和 `.env` 配置。
 
 原始财报 PDF 及竞赛附件数据来源于“泰迪杯”数据挖掘挑战赛。由于数据体积和竞赛资料发布限制，仓库不直接提供原始 PDF、完整数据库和大型运行产物；如需复现实验，可根据赛题数据自行准备本地数据环境。
 
@@ -385,15 +315,3 @@ python -m pytest tests
 - Agent 不支持任意 SQL 问答，也不支持自然语言转 SQL fallback。
 - 不支持的 intent、缺失槽位或歧义输入会进入澄清或拒答。
 - 原始 PDF、数据库和大型运行产物需要在本地环境准备。
-
-## 版本说明
-
-当前公开版本为 **V1.0**，定位为端到端可展示版本，包含：
-
-- 财报 PDF 结构化抽取流程；
-- PostgreSQL 财务数据底座；
-- 字段级 lineage 与质量校验；
-- LangGraph 财报问数 Agent；
-- QueryPlan、公司标准化、指标映射、槽位校验；
-- 模板 SQL 生成、执行前校验与只读查询；
-- 单点查询、趋势、同比、派生指标、公司对比、排名和多轮追问。

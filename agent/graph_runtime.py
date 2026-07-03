@@ -36,10 +36,12 @@ from agent.nodes.sql_nodes.yoy_ranking_sql import generate_yoy_ranking_sql_node
 from agent.nodes.sql_nodes.trend_ranking_sql import generate_trend_ranking_sql_node
 from agent.nodes.sql_nodes.rank_position_sql import generate_rank_position_sql_node
 from agent.nodes.answer_nodes.answer_dispatcher import generate_answer_node
+from agent.nodes.answer_nodes.common import assemble_final_answer_node
 from agent.nodes.answer_nodes.clarify_answer import build_clarification_response_node, generate_unsupported_answer_node
 from agent.nodes.answer_nodes.derived_answer import generate_derived_answer_node, generate_derived_yoy_answer_node
 from agent.nodes.answer_nodes.trend_answer import generate_derived_trend_answer_node
 from agent.nodes.execute_sql_node import review_and_execute_sql_node
+from agent.nodes.llm_insight import llm_insight_node
 from agent.nodes.analyze_nodes.trend_analysis import analyze_trend_node, analyze_derived_trend_node
 from agent.nodes.analyze_nodes.yoy_analysis import analyze_yoy_node, analyze_derived_yoy_node
 from agent.nodes.analyze_nodes.derived_analysis import analyze_derived_metric_node
@@ -136,18 +138,24 @@ class SimpleCompiledGraph:
         if intent_type == "company_compare_yoy_query":
             current_state.update((analyze_derived_compare_yoy_node if metric_types == {"derived"} else analyze_compare_yoy_node)(current_state))
             current_state.update(generate_answer_node(current_state))
+            current_state.update(llm_insight_node(current_state))
+            current_state.update(assemble_final_answer_node(current_state))
             current_state.update(remember_successful_query_plan_node(current_state))
             log_agent_run(current_state)
             return current_state
         if intent_type == "company_compare_trend_query":
             current_state.update((analyze_derived_compare_trend_node if metric_types == {"derived"} else analyze_compare_trend_node)(current_state))
             current_state.update(generate_answer_node(current_state))
+            current_state.update(llm_insight_node(current_state))
+            current_state.update(assemble_final_answer_node(current_state))
             current_state.update(remember_successful_query_plan_node(current_state))
             log_agent_run(current_state)
             return current_state
         if intent_type == "company_compare_query":
             current_state.update((analyze_derived_compare_node if metric_types == {"derived"} else analyze_compare_node)(current_state))
             current_state.update(generate_answer_node(current_state))
+            current_state.update(llm_insight_node(current_state))
+            current_state.update(assemble_final_answer_node(current_state))
             current_state.update(remember_successful_query_plan_node(current_state))
             log_agent_run(current_state)
             return current_state
@@ -155,6 +163,8 @@ class SimpleCompiledGraph:
             if metric_types == {"derived"}:
                 current_state.update(analyze_derived_yoy_node(current_state))
                 current_state.update(generate_derived_yoy_answer_node(current_state))
+                current_state.update(llm_insight_node(current_state))
+                current_state.update(assemble_final_answer_node(current_state))
                 current_state.update(remember_successful_query_plan_node(current_state))
                 log_agent_run(current_state)
                 return current_state
@@ -162,6 +172,8 @@ class SimpleCompiledGraph:
         elif intent_type == "derived_metric_query":
             current_state.update(analyze_derived_metric_node(current_state))
             current_state.update(generate_derived_answer_node(current_state))
+            current_state.update(llm_insight_node(current_state))
+            current_state.update(assemble_final_answer_node(current_state))
             current_state.update(remember_successful_query_plan_node(current_state))
             log_agent_run(current_state)
             return current_state
@@ -169,6 +181,8 @@ class SimpleCompiledGraph:
             if metric_types == {"derived"}:
                 current_state.update(analyze_derived_trend_node(current_state))
                 current_state.update(generate_derived_trend_answer_node(current_state))
+                current_state.update(llm_insight_node(current_state))
+                current_state.update(assemble_final_answer_node(current_state))
                 current_state.update(remember_successful_query_plan_node(current_state))
                 log_agent_run(current_state)
                 return current_state
@@ -184,6 +198,8 @@ class SimpleCompiledGraph:
         else:
             current_state.update(analyze_trend_node(current_state))
         current_state.update(generate_answer_node(current_state))
+        current_state.update(llm_insight_node(current_state))
+        current_state.update(assemble_final_answer_node(current_state))
         current_state.update(remember_successful_query_plan_node(current_state))
         log_agent_run(current_state)
         return current_state

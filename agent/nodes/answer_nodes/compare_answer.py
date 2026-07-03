@@ -60,6 +60,71 @@ def _metric_block(cr: dict, report_year: int, index: int | None = None) -> str:
     return body
 
 
+def _compare_status(all_results: list[dict[str, Any]]) -> tuple[bool, str | None]:
+    """根据对比分析状态生成业务状态。"""
+    statuses = {cr.get("status") for cr in all_results}
+    unavailable_statuses = {"compare_unavailable", "derived_compare_unavailable"}
+    partial_statuses = {"partial_compare_unavailable", "partial_derived_compare_unavailable"}
+    if statuses and statuses <= unavailable_statuses:
+        err_type = (
+            "derived_compare_unavailable"
+            if "derived_compare_unavailable" in statuses
+            else "compare_unavailable"
+        )
+        return False, err_type
+    if statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
+        err_type = (
+            "partial_derived_compare_unavailable"
+            if statuses.intersection({"derived_compare_unavailable", "partial_derived_compare_unavailable"})
+            else "partial_compare_unavailable"
+        )
+        return True, err_type
+    return True, None
+
+
+def _append_compare_detail_lines(
+    parts: list[str],
+    result: dict[str, Any],
+    *,
+    include_metric_heading: bool,
+    answer_facts: list[dict[str, Any]],
+) -> None:
+    """追加单年公司对比的支撑数据。"""
+    if include_metric_heading:
+        parts.append(f"{result['metric_name']}：")
+    unit = result.get("unit", "")
+    for item in result.get("items", []):
+        company_name = item.get("company_name", "")
+        status = item.get("status")
+        if status == "ok":
+            parts.append(f"- {company_name}：{_fmt_value(item['value'], unit)}")
+            answer_facts.append({
+                "company_name": company_name,
+                "metric_name": result["metric_name"],
+                "value": item["value"],
+                "unit": unit,
+                "status": status,
+            })
+        elif status == "missing_record":
+            parts.append(f"- {company_name}：无数据")
+        elif status == "empty_value":
+            parts.append(f"- {company_name}：数据为空")
+        elif status == "empty_numerator":
+            parts.append(f"- {company_name}：分子为空")
+        elif status == "empty_denominator":
+            parts.append(f"- {company_name}：分母为空")
+        elif status == "zero_denominator":
+            parts.append(f"- {company_name}：分母为0")
+        else:
+            parts.append(f"- {company_name}：无法计算")
+
+    if result.get("status") == "ok" and result.get("winner_company") and result.get("diff") is not None:
+        parts.append(
+            f"- 差值：{result['winner_company']}高出 "
+            f"{_fmt_diff(result['diff'], result.get('diff_unit', unit))}"
+        )
+
+
 def _generate_compare_answer(state: dict[str, Any]) -> dict:
     compare_result = state.get("compare_result") or []
     derived_result = state.get("derived_compare_result") or []
@@ -80,29 +145,20 @@ def _generate_compare_answer(state: dict[str, Any]) -> dict:
     from agent.nodes.answer_nodes.compare_semantic_answer import _semantic_point_compare_answer
     semantic_answer = _semantic_point_compare_answer(state, all_results)
     if semantic_answer:
-        statuses = {cr.get("status") for cr in all_results}
-        unavailable_statuses = {"compare_unavailable", "derived_compare_unavailable"}
-        partial_statuses = {"partial_compare_unavailable", "partial_derived_compare_unavailable"}
-        if statuses and statuses <= unavailable_statuses:
-            biz_success = False
-            err_type = (
-                "derived_compare_unavailable"
-                if "derived_compare_unavailable" in statuses
-                else "compare_unavailable"
+        biz_success, err_type = _compare_status(all_results)
+        answer_facts: list[dict[str, Any]] = []
+        parts = [semantic_answer, "", "对比数据："]
+        include_metric_heading = len(all_results) > 1
+        for result in all_results:
+            _append_compare_detail_lines(
+                parts,
+                result,
+                include_metric_heading=include_metric_heading,
+                answer_facts=answer_facts,
             )
-        elif statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
-            biz_success = True
-            err_type = (
-                "partial_derived_compare_unavailable"
-                if statuses.intersection({"derived_compare_unavailable", "partial_derived_compare_unavailable"})
-                else "partial_compare_unavailable"
-            )
-        else:
-            biz_success = True
-            err_type = None
         return {
-            "final_answer": semantic_answer,
-            "answer_facts": [],
+            "final_answer": "\n".join(parts),
+            "answer_facts": answer_facts,
             "sql_success": True,
             "business_success": biz_success,
             "error_type": err_type,
@@ -137,26 +193,7 @@ def _generate_compare_answer(state: dict[str, Any]) -> dict:
                 parts.append("   结论：所有公司均无有效数据，无法比较。")
         answer = "\n".join(parts)
 
-    statuses = {cr["status"] for cr in all_results}
-    unavailable_statuses = {"compare_unavailable", "derived_compare_unavailable"}
-    partial_statuses = {"partial_compare_unavailable", "partial_derived_compare_unavailable"}
-    if statuses and statuses <= unavailable_statuses:
-        biz_success = False
-        err_type = (
-            "derived_compare_unavailable"
-            if "derived_compare_unavailable" in statuses
-            else "compare_unavailable"
-        )
-    elif statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
-        biz_success = True
-        err_type = (
-            "partial_derived_compare_unavailable"
-            if statuses.intersection({"derived_compare_unavailable", "partial_derived_compare_unavailable"})
-            else "partial_compare_unavailable"
-        )
-    else:
-        biz_success = True
-        err_type = None
+    biz_success, err_type = _compare_status(all_results)
 
     return {
         "final_answer": answer,

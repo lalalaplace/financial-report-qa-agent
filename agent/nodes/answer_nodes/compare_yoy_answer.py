@@ -17,6 +17,108 @@ def _fmt_base_value(value: float, unit: str) -> str:
     return f"{value:.2f}"
 
 
+def _compare_yoy_status(all_results: list[dict[str, Any]]) -> tuple[bool, str | None]:
+    """根据同比对比分析状态生成业务状态。"""
+    statuses = {item.get("status") for item in all_results}
+    unavailable_statuses = {"compare_yoy_unavailable", "derived_compare_yoy_unavailable"}
+    partial_statuses = {"partial_compare_yoy_unavailable", "partial_derived_compare_yoy_unavailable"}
+    if statuses and statuses <= unavailable_statuses:
+        return False, "compare_yoy_unavailable"
+    if statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
+        return True, "partial_compare_yoy_unavailable"
+    return True, None
+
+
+def _append_yoy_detail_lines(
+    parts: list[str],
+    metric_result: dict[str, Any],
+    *,
+    include_metric_heading: bool,
+    answer_facts: list[dict[str, Any]],
+) -> None:
+    """追加公司同比对比的支撑数据。"""
+    if include_metric_heading:
+        parts.append(f"{metric_result['metric_name']}：")
+
+    is_derived = metric_result.get("metric_type") == "derived"
+    unit = metric_result.get("unit", "yuan")
+    precision = metric_result.get("precision", 2)
+    current_year = metric_result.get("current_year")
+    previous_year = metric_result.get("previous_year")
+
+    for item in metric_result.get("items", []):
+        company_name = item.get("company_name", "")
+        status = item.get("status")
+        if status == "ok":
+            if is_derived:
+                change = item.get("absolute_change")
+                if change is None:
+                    change_text = "变化无法计算"
+                elif change > 0:
+                    change_text = f"提高 {abs(change):.{precision}f} {item.get('change_unit', '百分点')}"
+                elif change < 0:
+                    change_text = f"下降 {abs(change):.{precision}f} {item.get('change_unit', '百分点')}"
+                else:
+                    change_text = "持平"
+                parts.append(
+                    f"- {company_name}：{previous_year} 年 "
+                    f"{_fmt_base_value(item['previous_value'], unit)}，"
+                    f"{current_year} 年 {_fmt_base_value(item['current_value'], unit)}，"
+                    f"{change_text}"
+                )
+            else:
+                yoy_rate = item.get("yoy_rate")
+                if yoy_rate is None:
+                    yoy_text = "同比无法计算"
+                elif yoy_rate > 0:
+                    yoy_text = f"同比增长 {yoy_rate * 100:.2f}%"
+                elif yoy_rate < 0:
+                    yoy_text = f"同比下降 {abs(yoy_rate) * 100:.2f}%"
+                else:
+                    yoy_text = "同比持平"
+                parts.append(
+                    f"- {company_name}：{previous_year} 年 "
+                    f"{_fmt_base_value(item['previous_value'], unit)}，"
+                    f"{current_year} 年 {_fmt_base_value(item['current_value'], unit)}，"
+                    f"{yoy_text}"
+                )
+            answer_facts.append({
+                "company_name": company_name,
+                "metric_name": metric_result["metric_name"],
+                "metric_type": metric_result.get("metric_type", "base"),
+                "current_year": current_year,
+                "previous_year": previous_year,
+                "current_value": item.get("current_value"),
+                "previous_value": item.get("previous_value"),
+                "absolute_change": item.get("absolute_change"),
+                "yoy_rate": item.get("yoy_rate"),
+                "unit": unit,
+                "status": status,
+            })
+        elif "current" in str(status):
+            parts.append(f"- {company_name}：缺少或无法使用 {current_year} 年数据")
+        elif "previous" in str(status):
+            parts.append(f"- {company_name}：缺少或无法使用 {previous_year} 年数据")
+        else:
+            parts.append(f"- {company_name}：无法计算同比")
+
+    if metric_result.get("status") == "ok" and metric_result.get("winner_company"):
+        if is_derived:
+            diff = metric_result.get("diff_change")
+            if diff is not None:
+                parts.append(
+                    f"- 差值：{metric_result['winner_company']}高出 "
+                    f"{diff:.{precision}f} {metric_result.get('diff_unit', '')}"
+                )
+        else:
+            diff = metric_result.get("diff_yoy_rate")
+            if diff is not None:
+                parts.append(
+                    f"- 差值：{metric_result['winner_company']}同比增速高出 "
+                    f"{diff * 100:.2f} 个百分点"
+                )
+
+
 def _generate_compare_yoy_answer(state: dict[str, Any]) -> dict:
     compare_yoy_result = state.get("compare_yoy_result") or []
     derived_yoy_result = state.get("derived_compare_yoy_result") or []
@@ -35,24 +137,23 @@ def _generate_compare_yoy_answer(state: dict[str, Any]) -> dict:
     from agent.nodes.answer_nodes.compare_semantic_answer import _semantic_yoy_compare_answer
     semantic_answer = _semantic_yoy_compare_answer(state, all_results)
     if semantic_answer:
-        statuses = {item.get("status") for item in all_results}
-        unavailable_statuses = {"compare_yoy_unavailable", "derived_compare_yoy_unavailable"}
-        partial_statuses = {"partial_compare_yoy_unavailable", "partial_derived_compare_yoy_unavailable"}
-        if statuses and statuses <= unavailable_statuses:
-            business_success = False
-            error_type = "compare_yoy_unavailable"
-        elif statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
-            business_success = True
-            error_type = "partial_compare_yoy_unavailable"
-        else:
-            business_success = True
-            error_type = None
+        business_success, error_type = _compare_yoy_status(all_results)
         warnings = state.get("warnings") or []
         if warnings:
             semantic_answer = "\n".join(warnings) + "\n\n" + semantic_answer
+        answer_facts: list[dict[str, Any]] = []
+        parts = [semantic_answer, "", "同比数据："]
+        include_metric_heading = len(all_results) > 1
+        for metric_result in all_results:
+            _append_yoy_detail_lines(
+                parts,
+                metric_result,
+                include_metric_heading=include_metric_heading,
+                answer_facts=answer_facts,
+            )
         return {
-            "final_answer": semantic_answer,
-            "answer_facts": [],
+            "final_answer": "\n".join(parts),
+            "answer_facts": answer_facts,
             "sql_success": True,
             "business_success": business_success,
             "error_type": error_type,
@@ -199,19 +300,7 @@ def _generate_compare_yoy_answer(state: dict[str, Any]) -> dict:
                     f"无法完成完整同比对比。已查询到 {'、'.join(available_names)} 的完整数据。"
                 )
 
-    unavail_statuses = {"compare_yoy_unavailable", "derived_compare_yoy_unavailable"}
-    partial_statuses = {"partial_compare_yoy_unavailable", "partial_derived_compare_yoy_unavailable"}
-    statuses = {item.get("status") for item in all_results}
-
-    if statuses and statuses <= unavail_statuses:
-        business_success = False
-        error_type = "compare_yoy_unavailable"
-    elif statuses.intersection(unavail_statuses) or statuses.intersection(partial_statuses):
-        business_success = True
-        error_type = "partial_compare_yoy_unavailable"
-    else:
-        business_success = True
-        error_type = None
+    business_success, error_type = _compare_yoy_status(all_results)
 
     warnings = state.get("warnings") or []
     answer = "\n".join(parts)

@@ -1,4 +1,4 @@
-"""多轮上下文上下文路由真实 LLM 测试。"""
+"""V0.7 上下文路由真实 LLM 测试。"""
 
 from __future__ import annotations
 

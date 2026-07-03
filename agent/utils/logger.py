@@ -334,6 +334,9 @@ def build_agent_run_log(state: dict[str, Any]) -> dict[str, Any]:
         "compare_spec": state.get("compare_spec"),
         "analysis_result": _collect_analysis_result(state),
         "analysis_result_summary": _analysis_result_summary(state),
+        "llm_analysis": state.get("llm_analysis"),
+        "llm_analysis_success": state.get("llm_analysis_success"),
+        "llm_analysis_error": state.get("llm_analysis_error"),
     }
     record.update(_ranking_log_fields(state))
 

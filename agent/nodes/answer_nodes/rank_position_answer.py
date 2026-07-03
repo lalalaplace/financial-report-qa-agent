@@ -16,11 +16,16 @@ def _build_position_text(result_summary: dict[str, Any]) -> str:
     if not result_summary:
         return ""
 
-    return (
-        f"\n\n按名次位置看，{result_summary.get('company_name', '')}"
-        f"处于前 {result_summary.get('percentile_bucket')}% 区间，"
-        f"属于{result_summary.get('position_zone')}。"
-    )
+    company_name = result_summary.get("company_name", "")
+    position_label = result_summary.get("position_label") or result_summary.get("position_zone")
+    if position_label == "中游":
+        return f"\n\n按名次位置看，{company_name}处于中游区间。"
+    if position_label:
+        return f"\n\n按名次位置看，{company_name}位于{position_label} 区间。"
+    percentile_bucket = result_summary.get("percentile_bucket")
+    if percentile_bucket:
+        return f"\n\n按名次位置看，{company_name}位于前 {percentile_bucket}% 区间。"
+    return ""
 
 
 def generate_rank_position_answer_node(state: dict[str, Any]) -> dict:

@@ -18,8 +18,12 @@ def _build_result_summary(company_name: str, rank_no: int, total_count: int) -> 
     """根据名次和总数生成粗粒度分位摘要。"""
     percentile = rank_no / total_count * 100
     bucket = max(10, int(((percentile + 9.9999) // 10) * 10))
-    if percentile <= 25:
+    if percentile <= 10:
+        zone = "前 10%"
+    elif percentile <= 25:
         zone = "前 25%"
+    elif percentile >= 90:
+        zone = "后 10%"
     elif percentile >= 75:
         zone = "后 25%"
     else:
@@ -29,6 +33,7 @@ def _build_result_summary(company_name: str, rank_no: int, total_count: int) -> 
         "company_name": company_name,
         "percentile_bucket": bucket,
         "position_zone": zone,
+        "position_label": zone,
     }
 
 

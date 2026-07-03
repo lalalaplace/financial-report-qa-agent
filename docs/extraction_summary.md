@@ -371,7 +371,9 @@ psql -f sql\05_create_financial_validation_result.sql
 - `sql/02_create_base_tables.sql`
 - `sql/03_create_attachment3_final_tables.sql`
 - `sql/04_create_final_table_lineage.sql`
+- `sql/04_export_current_11_tables.sql`
 - `sql/05_create_financial_validation_result.sql`
+- `sql/05_create_llm_targeted_backfill_audit.sql`
 - `sql/06_add_company_name_to_final_tables.sql`
 - `sql/check_rule.sql`
 - `sql/core.sql`
@@ -439,10 +441,12 @@ python scripts\pdf_extraction\statement_locator_quality.py --run-id <run_id>
 python -m pytest tests
 ```
 
-如需按历史版本分组运行当前仍保留的回归测试，可以使用：
+历史分组验收脚本：
 
 ```bat
-python tests\run_v06_test_suite.py
+python scripts\run_v06_test_suite.py
+python scripts\agent\run_v05_test_suite.py
+python scripts\agent\run_v045_test_suite.py
 ```
 
-早期 V0.4/V0.5 的独立脚本没有随 clean repo 发布，历史场景已合并到当前 `tests/` 下的正式测试。
+这些脚本用于历史版本场景回归，不替代当前 `tests/` 下的正式测试。

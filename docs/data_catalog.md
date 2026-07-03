@@ -8,7 +8,7 @@
 
 ## 数据库总体范围
 
-当前数据库包含 14 张 public 表：
+当前数据库包含 15 张 public 表：
 
 | 类型 | 表 |
 | --- | --- |
@@ -16,6 +16,7 @@
 | 字段字典与抽取结果 | `attachment3_field_dict`、`attachment3_extract_result`、`attachment3_extract_final`、`attachment3_validation_result` |
 | 最终财务表 | `balance_sheet`、`income_sheet`、`cash_flow_sheet`、`core_performance` |
 | 追溯与校验 | `final_table_lineage`、`financial_validation_result` |
+| 历史审计 | `llm_targeted_backfill_audit` |
 
 当前主要统计：
 

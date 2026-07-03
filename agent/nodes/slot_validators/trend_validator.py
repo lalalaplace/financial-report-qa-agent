@@ -6,6 +6,15 @@ from agent.schemas.query_plan import DEFAULT_TREND_RECENT_N_YEARS
 from agent.utils.year_utils import _metric_for_latest_year_lookup, _query_latest_fy_year
 
 
+def _explicit_report_years(start_year: int | None, end_year: int | None) -> list[int]:
+    """根据明确起止年份生成趋势年份列表。"""
+    if start_year is None or end_year is None:
+        return []
+    if start_year > end_year:
+        start_year, end_year = end_year, start_year
+    return list(range(start_year, end_year + 1))
+
+
 def validate(
     state: AgentState,
     report_period: str,
@@ -34,7 +43,26 @@ def validate(
         recent_n = state.get("recent_n_years")
 
     report_year = state.get("report_year")
-    if report_year is None:
+    start_year = state.get("start_year")
+    end_year = state.get("end_year")
+    report_years = list(state.get("report_years") or [])
+
+    if time_mode == "explicit_range":
+        if not report_years:
+            report_years = _explicit_report_years(start_year, end_year)
+        if len(report_years) < 2:
+            return {
+                "need_clarification": True,
+                "clarification_question": "趋势查询需要明确的起止年份，例如 2021 到 2024 年。",
+                "business_success": False,
+                "error_type": "missing_year",
+                "empty_fields": ["start_year", "end_year"],
+            }
+        start_year = min(report_years)
+        end_year = max(report_years)
+        report_year = end_year
+
+    elif report_year is None:
         company_for_lookup = companies[0] if companies else company_candidates[0]
         metric_for_lookup = metrics[0] if metrics else metric_candidates[0]
         latest_year = _query_latest_fy_year(company_for_lookup, metric_for_lookup)
@@ -43,19 +71,31 @@ def validate(
                 "need_clarification": True,
                 "clarification_question": "请说明趋势查询的报告年份；当前数据库未能确定最新年报年份。",
                 "business_success": False,
-                "error_type": "need_clarification",
-                "empty_fields": [],
+                "error_type": "missing_year",
+                "empty_fields": ["report_year"],
             }
         report_year = latest_year
+        recent_n = recent_n or DEFAULT_TREND_RECENT_N_YEARS
+        start_year = report_year - recent_n + 1
+        end_year = report_year
+        report_years = list(range(start_year, end_year + 1))
         warnings.append(
             f"你未指定年份，我将默认以最新年报（{latest_year} 年）为终点进行趋势查询。"
         )
+    elif time_mode == "recent_n":
+        recent_n = recent_n or DEFAULT_TREND_RECENT_N_YEARS
+        start_year = report_year - recent_n + 1
+        end_year = report_year
+        report_years = list(range(start_year, end_year + 1))
 
     return {
         "report_year": report_year,
         "report_period": report_period,
         "time_mode": time_mode,
+        "start_year": start_year,
+        "end_year": end_year,
         "recent_n_years": recent_n,
+        "report_years": report_years,
         "need_clarification": False,
         "clarification_question": None,
         "error_type": None,

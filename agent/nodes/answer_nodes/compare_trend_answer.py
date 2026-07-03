@@ -52,6 +52,33 @@ def _company_change_sentence(company_item: dict[str, Any], unit: str, precision:
     return f"整体从 {start} 到 {end}，保持持平"
 
 
+def _company_period_change_line(
+    company_item: dict[str, Any],
+    start_year: int | str | None,
+    end_year: int | str | None,
+    unit: str,
+    precision: int,
+) -> str:
+    """生成公司首末变化行。"""
+    change_abs = company_item.get("absolute_change")
+    if change_abs is None:
+        return f"- {start_year} 到 {end_year} 年：有效年份不足，无法计算首末变化"
+
+    change_unit = company_item.get("change_unit") or unit
+    if unit == "percent":
+        if change_abs > 0:
+            return f"- {start_year} 到 {end_year} 年提高 {_fmt_change(change_abs, change_unit, precision)}"
+        if change_abs < 0:
+            return f"- {start_year} 到 {end_year} 年下降 {_fmt_change(change_abs, change_unit, precision)}"
+        return f"- {start_year} 到 {end_year} 年持平"
+
+    if change_abs > 0:
+        return f"- {start_year} 到 {end_year} 年增加 {_fmt_change(change_abs, change_unit, precision)}"
+    if change_abs < 0:
+        return f"- {start_year} 到 {end_year} 年减少 {_fmt_change(change_abs, change_unit, precision)}"
+    return f"- {start_year} 到 {end_year} 年持平"
+
+
 def _metric_conclusion(metric_result: dict[str, Any], unit: str) -> str | None:
     latest_winner = metric_result.get("latest_year_winner_company")
     largest_change = metric_result.get("largest_absolute_change_company")
@@ -67,6 +94,76 @@ def _metric_conclusion(metric_result: dict[str, Any], unit: str) -> str | None:
     if not clauses:
         return None
     return "结论：" + "；".join(clauses) + "。"
+
+
+def _compare_trend_status(all_results: list[dict[str, Any]]) -> tuple[bool, str | None]:
+    """根据趋势对比分析状态生成业务状态。"""
+    statuses = {item.get("status") for item in all_results}
+    unavailable_statuses = {"compare_trend_unavailable", "derived_compare_trend_unavailable"}
+    partial_statuses = {
+        "partial_compare_trend_unavailable",
+        "partial_derived_compare_trend_unavailable",
+    }
+    if statuses and statuses <= unavailable_statuses:
+        error_type = (
+            "derived_compare_trend_unavailable"
+            if "derived_compare_trend_unavailable" in statuses
+            else "compare_trend_unavailable"
+        )
+        return False, error_type
+    if statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
+        error_type = (
+            "partial_derived_compare_trend_unavailable"
+            if statuses.intersection({"derived_compare_trend_unavailable", "partial_derived_compare_trend_unavailable"})
+            else "partial_compare_trend_unavailable"
+        )
+        return True, error_type
+    return True, None
+
+
+def _append_yearly_detail_lines(
+    parts: list[str],
+    metric_result: dict[str, Any],
+    *,
+    include_metric_heading: bool,
+    answer_facts: list[dict[str, Any]],
+) -> None:
+    """追加公司趋势对比的逐年数据明细。"""
+    unit = metric_result.get("unit", "")
+    precision = metric_result.get("precision", 2)
+    years = metric_result.get("years") or []
+    start_year = years[0] if years else None
+    end_year = years[-1] if years else None
+
+    if include_metric_heading:
+        parts.append(f"{metric_result['metric_name']}：")
+
+    for company_item in metric_result.get("items", []):
+        parts.append(f"- {company_item['company_name']}：")
+        for point in company_item.get("series", []):
+            value = point.get("value")
+            if point.get("status") == "ok" and value is not None:
+                parts.append(f"  - {point['year']} 年：{_fmt_trend_value(float(value), unit, precision)}")
+                answer_facts.append({
+                    "company_name": company_item["company_name"],
+                    "metric_name": metric_result["metric_name"],
+                    "report_year": point["year"],
+                    "value": value,
+                    "unit": unit,
+                    "status": "ok",
+                })
+            else:
+                parts.append(f"  - {point['year']} 年：无数据")
+        parts.append(
+            "  "
+            + _company_period_change_line(
+                company_item,
+                start_year,
+                end_year,
+                unit,
+                precision,
+            )
+        )
 
 
 def _generate_compare_trend_answer(state: dict[str, Any]) -> dict:
@@ -87,35 +184,23 @@ def _generate_compare_trend_answer(state: dict[str, Any]) -> dict:
     from agent.nodes.answer_nodes.compare_semantic_answer import _semantic_trend_compare_answer
     semantic_answer = _semantic_trend_compare_answer(state, all_results)
     if semantic_answer:
-        statuses = {item.get("status") for item in all_results}
-        unavailable_statuses = {"compare_trend_unavailable", "derived_compare_trend_unavailable"}
-        partial_statuses = {
-            "partial_compare_trend_unavailable",
-            "partial_derived_compare_trend_unavailable",
-        }
-        if statuses and statuses <= unavailable_statuses:
-            business_success = False
-            error_type = (
-                "derived_compare_trend_unavailable"
-                if "derived_compare_trend_unavailable" in statuses
-                else "compare_trend_unavailable"
-            )
-        elif statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
-            business_success = True
-            error_type = (
-                "partial_derived_compare_trend_unavailable"
-                if statuses.intersection({"derived_compare_trend_unavailable", "partial_derived_compare_trend_unavailable"})
-                else "partial_compare_trend_unavailable"
-            )
-        else:
-            business_success = True
-            error_type = None
+        business_success, error_type = _compare_trend_status(all_results)
         warnings = state.get("warnings") or []
         if warnings:
             semantic_answer = "\n".join(warnings) + "\n\n" + semantic_answer
+        answer_facts: list[dict[str, Any]] = []
+        parts = [semantic_answer, "", "年度数据："]
+        include_metric_heading = len(all_results) > 1
+        for metric_result in all_results:
+            _append_yearly_detail_lines(
+                parts,
+                metric_result,
+                include_metric_heading=include_metric_heading,
+                answer_facts=answer_facts,
+            )
         return {
-            "final_answer": semantic_answer,
-            "answer_facts": [],
+            "final_answer": "\n".join(parts),
+            "answer_facts": answer_facts,
             "sql_success": True,
             "business_success": business_success,
             "error_type": error_type,
@@ -155,29 +240,7 @@ def _generate_compare_trend_answer(state: dict[str, Any]) -> dict:
         if conclusion:
             parts.append(conclusion)
 
-    statuses = {item.get("status") for item in all_results}
-    unavailable_statuses = {"compare_trend_unavailable", "derived_compare_trend_unavailable"}
-    partial_statuses = {
-        "partial_compare_trend_unavailable",
-        "partial_derived_compare_trend_unavailable",
-    }
-    if statuses and statuses <= unavailable_statuses:
-        business_success = False
-        error_type = (
-            "derived_compare_trend_unavailable"
-            if "derived_compare_trend_unavailable" in statuses
-            else "compare_trend_unavailable"
-        )
-    elif statuses.intersection(unavailable_statuses) or statuses.intersection(partial_statuses):
-        business_success = True
-        error_type = (
-            "partial_derived_compare_trend_unavailable"
-            if statuses.intersection({"derived_compare_trend_unavailable", "partial_derived_compare_trend_unavailable"})
-            else "partial_compare_trend_unavailable"
-        )
-    else:
-        business_success = True
-        error_type = None
+    business_success, error_type = _compare_trend_status(all_results)
 
     warnings = state.get("warnings") or []
     answer = "\n".join(parts)

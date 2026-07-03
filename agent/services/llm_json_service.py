@@ -10,6 +10,8 @@ from typing import Any
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_DEEPSEEK_BASE_URL = "https://api.deepseek.com"
+DEFAULT_DEEPSEEK_MODEL = "deepseek-v4-flash"
 
 
 def load_dotenv_if_available() -> None:
@@ -85,13 +87,19 @@ def build_llm():
     except ImportError as exc:
         raise RuntimeError("未安装 langchain_openai，无法调用 LLM。") from exc
 
-    model = get_required_env("AGENT_LLM_MODEL", "OPENAI_MODEL", "DEEPSEEK_MODEL")
+    model = (
+        get_optional_env("AGENT_LLM_MODEL", "OPENAI_MODEL", "DEEPSEEK_MODEL")
+        or DEFAULT_DEEPSEEK_MODEL
+    )
     api_key = get_required_env(
         "AGENT_LLM_API_KEY",
         "OPENAI_API_KEY",
         "DEEPSEEK_API_KEY",
     )
-    base_url = get_optional_env("AGENT_LLM_BASE_URL", "OPENAI_BASE_URL", "DEEPSEEK_BASE_URL")
+    base_url = (
+        get_optional_env("AGENT_LLM_BASE_URL", "OPENAI_BASE_URL", "DEEPSEEK_BASE_URL")
+        or DEFAULT_DEEPSEEK_BASE_URL
+    )
 
     kwargs: dict[str, Any] = {
         "model": model,
@@ -117,4 +125,3 @@ __all__ = [
     "invoke_json_prompt",
     "load_dotenv_if_available",
 ]
-

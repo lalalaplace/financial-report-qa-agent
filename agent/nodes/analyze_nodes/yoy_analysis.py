@@ -94,13 +94,30 @@ def analyze_yoy_node(state: AgentState) -> dict:
 
         items.append(item)
 
+    ok_count = sum(1 for item in items if item.get("status") == "ok")
+    failed_count = len(items) - ok_count
+    if ok_count == 0:
+        business_success = False
+        error_type = "yoy_unavailable"
+    elif failed_count > 0:
+        business_success = True
+        error_type = "partial_empty_value"
+    else:
+        business_success = True
+        error_type = None
+
+    yoy_result = {
+        "company_name": company_name,
+        "report_year": report_year,
+        "previous_year": prev_year,
+        "items": items,
+    }
+
     return {
-        "yoy_result": {
-            "company_name": company_name,
-            "report_year": report_year,
-            "previous_year": prev_year,
-            "items": items,
-        }
+        "yoy_result": yoy_result,
+        "analysis_result": yoy_result,
+        "business_success": business_success,
+        "error_type": error_type,
     }
 
 def analyze_derived_yoy_node(state: AgentState) -> dict:

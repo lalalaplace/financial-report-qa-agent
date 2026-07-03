@@ -41,7 +41,9 @@ from agent.nodes.sql_nodes.yoy_ranking_sql import generate_yoy_ranking_sql_node
 from agent.nodes.sql_nodes.trend_ranking_sql import generate_trend_ranking_sql_node
 from agent.nodes.sql_nodes.rank_position_sql import generate_rank_position_sql_node
 from agent.nodes.execute_sql_node import review_and_execute_sql_node
+from agent.nodes.llm_insight import llm_insight_node
 from agent.nodes.answer_nodes.answer_dispatcher import generate_answer_node
+from agent.nodes.answer_nodes.common import assemble_final_answer_node
 from agent.nodes.answer_nodes.clarify_answer import build_clarification_response_node, generate_unsupported_answer_node
 from agent.nodes.answer_nodes.derived_answer import generate_derived_answer_node, generate_derived_yoy_answer_node
 from agent.nodes.answer_nodes.trend_answer import generate_derived_trend_answer_node
@@ -100,6 +102,8 @@ def build_graph():
     graph.add_node("generate_unsupported_answer", generate_unsupported_answer_node)
     graph.add_node("build_clarification_response", build_clarification_response_node)
     graph.add_node("review_and_execute_sql", review_and_execute_sql_node)
+    graph.add_node("llm_insight", llm_insight_node)
+    graph.add_node("assemble_final_answer", assemble_final_answer_node)
     graph.add_node("analyze_trend", analyze_trend_node)
     graph.add_node("analyze_yoy", analyze_yoy_node)
     graph.add_node("analyze_derived_trend", analyze_derived_trend_node)
@@ -175,16 +179,31 @@ def build_graph():
         "analyze_rank_position": "analyze_rank_position",
     })
 
-    for node_name in ["analyze_compare", "analyze_derived_compare", "analyze_compare_trend", "analyze_derived_compare_trend", "analyze_compare_yoy", "analyze_derived_compare_yoy", "analyze_yoy", "analyze_trend", "analyze_ranking", "analyze_yoy_ranking", "analyze_trend_ranking", "analyze_rank_position"]:
+    for node_name in [
+        "analyze_compare",
+        "analyze_derived_compare",
+        "analyze_compare_trend",
+        "analyze_derived_compare_trend",
+        "analyze_compare_yoy",
+        "analyze_derived_compare_yoy",
+        "analyze_yoy",
+        "analyze_trend",
+        "analyze_ranking",
+        "analyze_yoy_ranking",
+        "analyze_trend_ranking",
+        "analyze_rank_position",
+        "analyze_derived_trend",
+        "analyze_derived_yoy",
+        "analyze_derived_metric",
+    ]:
         graph.add_edge(node_name, "generate_answer")
-    graph.add_edge("analyze_derived_trend", "generate_derived_trend_answer")
-    graph.add_edge("analyze_derived_yoy", "generate_derived_yoy_answer")
-    graph.add_edge("analyze_derived_metric", "generate_derived_answer")
     graph.add_edge("generate_derived_answer", "remember_successful_query_plan")
     graph.add_edge("generate_derived_trend_answer", "remember_successful_query_plan")
     graph.add_edge("generate_derived_yoy_answer", "remember_successful_query_plan")
     graph.add_edge("build_clarification_response", END)
-    graph.add_edge("generate_answer", "remember_successful_query_plan")
+    graph.add_edge("generate_answer", "llm_insight")
+    graph.add_edge("llm_insight", "assemble_final_answer")
+    graph.add_edge("assemble_final_answer", "remember_successful_query_plan")
     graph.add_edge("remember_successful_query_plan", END)
     return LoggedCompiledGraph(graph.compile())
 

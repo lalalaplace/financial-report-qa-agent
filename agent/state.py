@@ -84,6 +84,8 @@ class AgentState(TypedDict, total=False):
         "yoy_ranking_query",
         "trend_ranking_query",
         "rank_position_query",
+        "derived_trend_query",
+        "derived_yoy_query",
         "unknown",
     ]
 
@@ -143,6 +145,9 @@ class AgentState(TypedDict, total=False):
 
     # 6. 分析结果层
     analysis_result: dict | None
+    llm_analysis: dict | None
+    llm_analysis_success: bool
+    llm_analysis_error: str | None
     compare_result: list[dict[str, Any]]
     compare_trend_result: list
     compare_yoy_result: list[dict[str, Any]]

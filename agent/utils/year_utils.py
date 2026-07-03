@@ -13,10 +13,12 @@ def _query_latest_fy_year(company: dict[str, Any], metric: dict[str, Any]) -> in
     table = metric.get("table") or "balance_sheet"
     stock_code = company["stock_code"].replace("'", "''")
     sql = f"""
-    SELECT MAX(report_year) AS report_year
+    SELECT report_year
     FROM {table}
     WHERE stock_code = '{stock_code}'
       AND report_period = 'FY'
+    ORDER BY report_year DESC
+    LIMIT 1
     """
     result = execute_readonly_sql(sql, limit=1)
     if not result["success"] or not result["rows"]:

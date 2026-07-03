@@ -11,6 +11,10 @@ from agent.nodes.answer_nodes.trend_answer import (
     _generate_trend_answer,
     generate_derived_trend_answer_node,
 )
+from agent.nodes.answer_nodes.derived_answer import (
+    generate_derived_answer_node,
+    generate_derived_yoy_answer_node,
+)
 from agent.nodes.answer_nodes.compare_answer import _generate_compare_answer
 from agent.nodes.answer_nodes.compare_trend_answer import _generate_compare_trend_answer
 from agent.nodes.answer_nodes.compare_yoy_answer import _generate_compare_yoy_answer
@@ -47,7 +51,12 @@ def generate_answer_node(state: AgentState) -> dict:
     if intent_type == "company_compare_query":
         return _generate_compare_answer(state)
 
+    if intent_type == "derived_metric_query":
+        return generate_derived_answer_node(state)
+
     if intent_type == "yoy_query":
+        if "derived" in metric_types:
+            return generate_derived_yoy_answer_node(state)
         return _generate_yoy_answer(state)
 
     if intent_type == "trend_query":

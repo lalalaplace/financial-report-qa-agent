@@ -39,16 +39,21 @@ def generate_trend_sql_node(state: AgentState) -> dict:
     report_period = state.get("report_period") or DEFAULT_REPORT_PERIOD
 
     # 计算年份范围
-    time_mode = state.get("time_mode") or "recent_n"
-    report_year = state.get("report_year")
-    if time_mode == "explicit_range":
-        start_year = state.get("start_year")
-        end_year = state.get("end_year")
+    report_years = sorted({int(year) for year in (state.get("report_years") or [])})
+    if report_years:
+        start_year = report_years[0]
+        end_year = report_years[-1]
     else:
-        # recent_n 或默认
-        recent_n = state.get("recent_n_years") or 5
-        end_year = report_year
-        start_year = end_year - recent_n + 1 if end_year else None
+        time_mode = state.get("time_mode") or "recent_n"
+        report_year = state.get("report_year")
+        if time_mode == "explicit_range":
+            start_year = state.get("start_year")
+            end_year = state.get("end_year")
+        else:
+            # recent_n 或默认
+            recent_n = state.get("recent_n_years") or 5
+            end_year = report_year
+            start_year = end_year - recent_n + 1 if end_year else None
 
     if start_year is None or end_year is None:
         return {
