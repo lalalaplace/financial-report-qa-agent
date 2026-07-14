@@ -10,6 +10,11 @@ import pytest
 from agent.services import llm_json_service
 
 
+@pytest.fixture(autouse=True)
+def mock_llm_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("AGENT_LLM_API_KEY", "test-api-key")
+
+
 def test_sql_generator_profile_explicitly_disables_thinking(monkeypatch) -> None:
     captured: dict[str, object] = {}
 
