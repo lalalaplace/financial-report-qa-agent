@@ -20,7 +20,9 @@ output/
 logs/
 
 # GitHub 展示补充规则
+prompts/
 AGENTS.md
+scripts/AGENTS.md
 .pytest_cache/
 .cache/
 .ipynb_checkpoints/
