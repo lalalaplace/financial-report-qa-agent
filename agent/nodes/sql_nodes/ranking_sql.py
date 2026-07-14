@@ -119,10 +119,10 @@ def build_derived_ranking_sql(
 
     sql_direction = "DESC" if rank_direction == "desc" else "ASC"
 
-    # V0.5.2：NULLIF 处理分母为 0 / NULL，CAST 类型统一为 DOUBLE
+    # V0.5.2：NULLIF 处理分母为 0 / NULL，CAST 类型统一为 NUMERIC
     safe_division = (
-        f"ROUND(CAST({num_alias}.{num_field} AS DOUBLE) "
-        f"/ NULLIF(CAST({den_alias}.{den_field} AS DOUBLE), 0), 8)"
+        f"ROUND(CAST({num_alias}.{num_field} AS NUMERIC) "
+        f"/ NULLIF(CAST({den_alias}.{den_field} AS NUMERIC), 0), 8)"
     )
 
     if num_table == den_table:

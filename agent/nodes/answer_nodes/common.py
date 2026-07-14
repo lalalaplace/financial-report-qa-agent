@@ -40,11 +40,6 @@ def append_llm_insight_section(answer_payload: dict, state: dict) -> dict:
     return updated
 
 
-def assemble_final_answer_node(state: dict) -> dict:
-    """最终答案拼接节点。"""
-    return append_llm_insight_section({"final_answer": state.get("final_answer")}, state)
-
-
 def _fmt_yuan_value(value: float) -> str:
     """将元值格式化为亿元显示。"""
     return f"{value / 100000000:.2f} 亿元"
@@ -53,3 +48,24 @@ def _fmt_yuan_value(value: float) -> str:
 def _section_numeral(index: int) -> str:
     numerals = ["一", "二", "三", "四", "五", "六", "七", "八", "九", "十"]
     return numerals[index - 1] if 1 <= index <= len(numerals) else str(index)
+
+
+def append_llm_sql_notice(answer_payload: dict, state: dict) -> dict:
+    """受控 LLM SQL 成功路径补充审计提示。"""
+    if state.get("sql_generation_mode") != "llm_sql":
+        return answer_payload
+    final_answer = answer_payload.get("final_answer")
+    if not isinstance(final_answer, str) or not final_answer:
+        return answer_payload
+    notice = "本次查询由受控 LLM SQL 生成，已通过只读和字段校验。"
+    if notice in final_answer:
+        return answer_payload
+    updated = dict(answer_payload)
+    updated["final_answer"] = final_answer.rstrip() + "\n\n" + notice
+    return updated
+
+
+def assemble_final_answer_node(state: dict) -> dict:
+    """最终答案拼接节点。"""
+    payload = append_llm_sql_notice({"final_answer": state.get("final_answer")}, state)
+    return append_llm_insight_section(payload, state)

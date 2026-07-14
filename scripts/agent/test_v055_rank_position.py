@@ -135,7 +135,7 @@ def test_derived_sql_uses_nullif_and_rank_window():
         report_period="FY",
         rank_direction="asc",
     )
-    assert "NULLIF(CAST(i.operating_revenue AS DOUBLE), 0)" in sql
+    assert "NULLIF(CAST(i.operating_revenue AS NUMERIC), 0)" in sql
     assert "i.operating_revenue != 0" in sql
     assert "RANK() OVER" in sql
     assert "ORDER BY net_profit_margin ASC" in sql

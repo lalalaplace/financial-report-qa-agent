@@ -29,13 +29,27 @@ def route_after_patch_node(state: AgentState) -> str:
 
 
 def should_end_after_plan(state: AgentState) -> str:
+    if state.get("composite_query_plan"):
+        if state.get("need_clarification"):
+            return "build_clarification_response"
+        return "execute_composite_query"
     if state.get("need_clarification"):
         return "build_clarification_response"
     return "resolve_company"
 
+def route_after_composite_execution(state: AgentState) -> str:
+    if state.get("need_clarification"):
+        return "build_clarification_response"
+    return "composite_answer"
+
 def should_end_after_slot_check(state: AgentState) -> str:
     if state.get("need_clarification"):
         return "build_clarification_response"
+    query_spec = state.get("query_spec") if isinstance(state.get("query_spec"), dict) else {}
+    if query_spec.get("execution_mode") == "flexible_sql" or isinstance(state.get("llm_sql_requirement"), dict):
+        return "route_sql_generation"
+    if state.get("is_global_structured_query"):
+        return "route_sql_generation"
     return route_by_intent(state)
 
 def route_trend_metric_type(state: AgentState) -> str:
@@ -133,6 +147,8 @@ def should_end_after_sql_generation(state: AgentState) -> str:
 
 def route_analysis(state: AgentState) -> str:
     """根据 intent_type 路由到对应的分析节点。"""
+    if state.get("sql_generation_mode") == "llm_sql":
+        return "analyze_llm_sql"
     intent_type = state.get("intent_type") or DEFAULT_QUERY_TYPE
     if intent_type == "yoy_query":
         metrics = state.get("metrics") or []
@@ -175,4 +191,4 @@ def route_analysis(state: AgentState) -> str:
         return "analyze_rank_position"
     return "analyze_trend"
 
-__all__ = ['route_after_context_router', 'route_after_patch_node', 'should_end_after_plan', 'should_end_after_slot_check', 'route_trend_metric_type', 'route_yoy_metric_type', 'route_compare_metric_type', 'route_compare_yoy_metric_type', 'route_compare_trend_metric_type', 'route_by_intent', 'should_end_after_sql_generation', 'route_analysis']
+__all__ = ['route_after_context_router', 'route_after_patch_node', 'should_end_after_plan', 'route_after_composite_execution', 'should_end_after_slot_check', 'route_trend_metric_type', 'route_yoy_metric_type', 'route_compare_metric_type', 'route_compare_yoy_metric_type', 'route_compare_trend_metric_type', 'route_by_intent', 'should_end_after_sql_generation', 'route_analysis']

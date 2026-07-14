@@ -1,4 +1,5 @@
 import argparse
+import os
 import hashlib
 import json
 from pathlib import Path
@@ -7,12 +8,16 @@ from typing import Dict, List, Optional
 import fitz
 import psycopg2
 
-from db_config import get_db_config
-
 from statement_table_schema import compact_text, normalize_text
 
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 PAGE_ARTIFACT_ROOT = PROJECT_ROOT / "output" / "pdf_extraction" / "page_artifacts"
@@ -353,6 +358,5 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
 
 

@@ -1,4 +1,5 @@
 import argparse
+import os
 import json
 import sys
 from pathlib import Path
@@ -6,10 +7,14 @@ from typing import Dict, List, Optional
 
 import psycopg2
 
-from db_config import get_db_config
 
-
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = PROJECT_ROOT / "output" / "pdf_extraction" / "validation"
@@ -151,4 +156,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

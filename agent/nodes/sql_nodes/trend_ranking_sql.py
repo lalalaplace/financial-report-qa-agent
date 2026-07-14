@@ -40,9 +40,9 @@ def build_base_trend_ranking_sql(
         start_t.{field} AS start_value,
         end_t.{field} AS end_value,
         (
-            CAST(end_t.{field} AS DOUBLE)
-            - CAST(start_t.{field} AS DOUBLE)
-        ) / NULLIF(CAST(start_t.{field} AS DOUBLE), 0) AS growth_rate
+            CAST(end_t.{field} AS DOUBLE PRECISION)
+            - CAST(start_t.{field} AS DOUBLE PRECISION)
+        ) / NULLIF(CAST(start_t.{field} AS DOUBLE PRECISION), 0) AS growth_rate
     FROM {table} start_t
     JOIN {table} end_t
         ON start_t.stock_code = end_t.stock_code

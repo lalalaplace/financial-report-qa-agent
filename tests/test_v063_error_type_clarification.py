@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-import inspect
+import pytest
 
-import agent.graph_runtime as graph_runtime_module
-import agent.routing as routing_module
+from agent.graph import build_graph
+import agent.graph as graph_module
+from agent.graph_runtime import SimpleCompiledGraph
 from agent.nodes.answer_nodes.clarify_answer import generate_unsupported_answer_node
 from agent.nodes.slot_nodes import check_slots_node
 
@@ -134,25 +135,13 @@ def test_slot_missing_ranking_limit_outputs_stable_clarification_fields():
     assert result["clarification_type"] == "missing_ranking_limit"
 
 
-def test_simple_compiled_graph_has_supported_intent_chains_registered():
-    runtime_source = inspect.getsource(graph_runtime_module.SimpleCompiledGraph.invoke)
-    routing_source = inspect.getsource(routing_module)
-    expected_tokens = {
-        "single_metric_query": ["generate_point_sql", "review_and_execute_sql_node", "generate_answer_node"],
-        "multi_metric_query": ["generate_point_sql", "review_and_execute_sql_node", "generate_answer_node"],
-        "derived_metric_query": ["generate_derived_sql", "analyze_derived_metric_node", "generate_derived_answer_node"],
-        "trend_query": ["generate_trend_sql", "generate_derived_trend_sql", "analyze_trend_node", "analyze_derived_trend_node", "generate_derived_trend_answer_node"],
-        "yoy_query": ["generate_yoy_sql", "generate_derived_yoy_sql", "analyze_yoy_node", "analyze_derived_yoy_node", "generate_derived_yoy_answer_node"],
-        "company_compare_query": ["generate_compare_sql", "generate_derived_compare_sql", "analyze_compare_node", "analyze_derived_compare_node", "generate_answer_node"],
-        "company_compare_trend_query": ["generate_compare_trend_sql", "generate_derived_compare_trend_sql", "analyze_compare_trend_node", "analyze_derived_compare_trend_node", "generate_answer_node"],
-        "company_compare_yoy_query": ["generate_compare_yoy_sql", "generate_derived_compare_yoy_sql", "analyze_compare_yoy_node", "analyze_derived_compare_yoy_node", "generate_answer_node"],
-        "ranking_query": ["generate_ranking_sql", "analyze_ranking_node", "generate_answer_node"],
-        "yoy_ranking_query": ["generate_yoy_ranking_sql", "analyze_yoy_ranking_node", "generate_answer_node"],
-        "trend_ranking_query": ["generate_trend_ranking_sql", "analyze_trend_ranking_node", "generate_answer_node"],
-        "rank_position_query": ["generate_rank_position_sql", "analyze_rank_position_node", "generate_answer_node"],
-    }
+def test_missing_langgraph_fails_instead_of_entering_legacy_runtime(monkeypatch):
+    monkeypatch.setattr(graph_module, "StateGraph", None)
 
-    for intent_type, tokens in expected_tokens.items():
-        assert intent_type in routing_source or intent_type in runtime_source
-        for token in tokens:
-            assert token in runtime_source
+    with pytest.raises(RuntimeError, match="双通道主图"):
+        build_graph()
+
+
+def test_simple_compiled_graph_is_explicitly_disabled():
+    with pytest.raises(RuntimeError, match="已废弃"):
+        SimpleCompiledGraph().invoke({})

@@ -20,7 +20,7 @@ FORBIDDEN_SQL_PATTERN = re.compile(
 
 # V0.5.1：SQL 函数白名单（与 agent/tools/sql_tools.py 保持一致）
 _ALLOWED_SQL_FUNCTIONS = {
-    "cast", "count", "rank", "round", "coalesce", "nullif",
+    "cast", "count", "rank", "row_number", "dense_rank", "lag", "abs", "round", "coalesce", "nullif",
 }
 _FUNCTION_CHECK_EXCLUDED = {
     "select", "from", "where", "and", "or", "on", "as", "in", "not", "null",
@@ -167,3 +167,45 @@ def execute_readonly_sql(
 
     except (SQLAlchemyError, ValueError) as exc:
         return _empty_result(str(exc))
+
+
+def explain_sql(sql: str, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict[str, Any]:
+    """对只读 SQL 做 EXPLAIN，用于真实执行前的轻量校验。"""
+    sql_clean = sql.strip().rstrip(";")
+    if not sql_clean:
+        return _empty_result("SQL is empty.")
+    if ";" in sql_clean:
+        return _empty_result("Multiple SQL statements are not allowed.")
+    if not _is_readonly_query(sql_clean):
+        return _empty_result("Only SELECT or WITH queries are allowed.")
+
+    try:
+        from sqlalchemy import text
+        from sqlalchemy.exc import SQLAlchemyError
+    except ImportError as exc:
+        return _empty_result(str(exc))
+
+    try:
+        with get_engine().connect() as conn:
+            if conn.dialect.name == "postgresql" and timeout_ms > 0:
+                with conn.begin():
+                    conn.execute(text("SET LOCAL statement_timeout = :timeout_ms"), {"timeout_ms": timeout_ms})
+                    result = conn.execute(text(f"EXPLAIN {sql_clean}"))
+                    rows = [list(row) for row in result.fetchall()]
+            else:
+                result = conn.execute(text(f"EXPLAIN {sql_clean}"))
+                rows = [list(row) for row in result.fetchall()]
+        return {
+            "success": True,
+            "columns": ["plan"],
+            "rows": rows,
+            "row_count": len(rows),
+            "error": None,
+        }
+    except (SQLAlchemyError, ValueError) as exc:
+        return _empty_result(str(exc))
+
+
+def dry_run_sql(sql: str, limit: int = 5, timeout_ms: int = DEFAULT_TIMEOUT_MS) -> dict[str, Any]:
+    """用小 LIMIT 执行只读 SQL，验证字段、语法和基本可执行性。"""
+    return execute_readonly_sql(sql, limit=limit, timeout_ms=timeout_ms)

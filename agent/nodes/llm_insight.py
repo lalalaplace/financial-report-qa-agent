@@ -109,7 +109,9 @@ def should_run_llm_insight(state: AgentState) -> bool:
         return False
     if state.get("error_type"):
         return False
-    if state.get("intent_type") not in ANALYZABLE_INTENTS:
+    execution = state.get("execution") if isinstance(state.get("execution"), dict) else {}
+    is_verified_flexible_sql = execution.get("execution_mode") == "flexible_sql"
+    if state.get("intent_type") not in ANALYZABLE_INTENTS and not is_verified_flexible_sql:
         return False
     if not isinstance(state.get("final_answer"), str) or not state.get("final_answer"):
         return False
@@ -123,6 +125,7 @@ def build_result_insight_payload(state: AgentState) -> dict[str, Any]:
         "query_result": state.get("query_result"),
         "analysis_result": state.get("analysis_result"),
         "base_answer": state.get("final_answer"),
+        "query_spec": state.get("query_spec"),
     }
 
 

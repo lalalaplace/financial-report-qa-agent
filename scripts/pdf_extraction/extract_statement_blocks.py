@@ -2,9 +2,8 @@ import argparse
 from pathlib import Path
 from typing import Dict, List, Optional
 
+import os
 import psycopg2
-
-from db_config import get_db_config
 
 from statement_table_schema import (
     FORMAT_VERSION,
@@ -16,7 +15,13 @@ from statement_table_schema import (
 from table_geometry_recover import recover_table_from_pdf
 
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = PROJECT_ROOT / "output" / "pdf_extraction" / "statement_json"
@@ -380,4 +385,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

@@ -1,218 +1,41 @@
-"""Agent 图装配：构建 langgraph StateGraph，连接节点与路由。"""
-
+"""财报问数双通道主图。"""
 from __future__ import annotations
 
-import json
-import sys
-from pathlib import Path
-
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
-
+from agent.graph_runtime import LoggedCompiledGraph
+from agent.nodes.context_llm_nodes import context_router_node, remember_successful_query_plan_node
+from agent.nodes.answer_nodes.clarify_answer import build_clarification_response_node
 from agent.state import AgentState
-from agent.nodes.context_llm_nodes import (
-    clarification_patch_node,
-    context_router_node,
-    followup_patch_node,
-    followup_plan_node,
-    merge_clarification_patch_node,
-    merge_followup_patch_node,
-    remember_successful_query_plan_node,
-)
-from agent.nodes.llm_plan_query import llm_plan_query_node
-from agent.nodes.slot_nodes import resolve_company_node, map_metric_node, check_slots_node
-from agent.nodes.sql_nodes.point_sql import generate_point_sql_node
-from agent.nodes.sql_nodes.trend_sql import generate_trend_sql_node
-from agent.nodes.sql_nodes.yoy_sql import generate_yoy_sql_node
-from agent.nodes.sql_nodes.derived_sql import (
-    generate_derived_sql_node,
-    generate_derived_trend_sql_node,
-    generate_derived_yoy_sql_node,
-    generate_derived_compare_sql_node,
-    generate_derived_compare_trend_sql_node,
-    generate_derived_compare_yoy_sql_node,
-)
-from agent.nodes.sql_nodes.compare_sql import generate_compare_sql_node
-from agent.nodes.sql_nodes.compare_trend_sql import generate_compare_trend_sql_node
-from agent.nodes.sql_nodes.compare_yoy_sql import generate_compare_yoy_sql_node
-from agent.nodes.sql_nodes.ranking_sql import generate_ranking_sql_node
-from agent.nodes.sql_nodes.yoy_ranking_sql import generate_yoy_ranking_sql_node
-from agent.nodes.sql_nodes.trend_ranking_sql import generate_trend_ranking_sql_node
-from agent.nodes.sql_nodes.rank_position_sql import generate_rank_position_sql_node
-from agent.nodes.execute_sql_node import review_and_execute_sql_node
-from agent.nodes.llm_insight import llm_insight_node
-from agent.nodes.answer_nodes.answer_dispatcher import generate_answer_node
-from agent.nodes.answer_nodes.common import assemble_final_answer_node
-from agent.nodes.answer_nodes.clarify_answer import build_clarification_response_node, generate_unsupported_answer_node
-from agent.nodes.answer_nodes.derived_answer import generate_derived_answer_node, generate_derived_yoy_answer_node
-from agent.nodes.answer_nodes.trend_answer import generate_derived_trend_answer_node
-from agent.nodes.analyze_nodes.trend_analysis import analyze_trend_node, analyze_derived_trend_node
-from agent.nodes.analyze_nodes.yoy_analysis import analyze_yoy_node, analyze_derived_yoy_node
-from agent.nodes.analyze_nodes.derived_analysis import analyze_derived_metric_node
-from agent.nodes.analyze_nodes.compare_analysis import analyze_compare_node, analyze_derived_compare_node
-from agent.nodes.analyze_nodes.compare_trend_analysis import analyze_compare_trend_node, analyze_derived_compare_trend_node
-from agent.nodes.analyze_nodes.compare_yoy_analysis import analyze_compare_yoy_node, analyze_derived_compare_yoy_node
-from agent.nodes.analyze_nodes.ranking_analysis import analyze_ranking_node
-from agent.nodes.analyze_nodes.yoy_ranking_analysis import analyze_yoy_ranking_node
-from agent.nodes.analyze_nodes.trend_ranking_analysis import analyze_trend_ranking_node
-from agent.nodes.analyze_nodes.rank_position_analysis import analyze_rank_position_node
-from agent.routing import route_after_context_router, route_after_patch_node, should_end_after_plan, should_end_after_slot_check, should_end_after_sql_generation, route_analysis
-from agent.graph_runtime import LoggedCompiledGraph, SimpleCompiledGraph
+from agent.target_graph_routing import route_after_capability_router, route_after_context_router_target, route_after_dry_run, route_after_execute_sql, route_after_flexible_sql_spec, route_after_llm_sql_generator, route_after_query_spec_validator, route_after_semantic_validate, route_after_sql_guard
+from agent.nodes.target_graph_nodes import answer_assembler_node, answer_validator_node, capability_boundary_answer_node, capability_router_node, controlled_failure_node, deterministic_result_analyzer_node, deterministic_sql_builder_node, deterministic_table_node, dry_run_node, entity_normalization_node, execute_sql_node, fixed_answer_renderer_node, flexible_sql_spec_builder_node, irrelevant_answer_node, llm_insight_node_adapter, llm_narrative_node, llm_sql_generator_node, llm_sql_repair_node_adapter, merge_context_node, query_planner_node, query_spec_validator_node, result_contract_builder_node, semantic_validate_node, sql_guard_node
+from agent.utils.stage_trace import traced_node
 
 try:
     from langgraph.graph import END, START, StateGraph
 except ImportError:
-    START = "__start__"
-    END = "__end__"
-    StateGraph = None
+    END, START, StateGraph = "__end__", "__start__", None
 
 
 def build_graph():
     if StateGraph is None:
-        return SimpleCompiledGraph()
-
+        raise RuntimeError("财报问数 Agent 需要 langgraph；为避免进入与双通道主图不一致的旧执行链路，已禁止线性降级执行。")
     graph = StateGraph(AgentState)
-    graph.add_node("context_router", context_router_node)
-    graph.add_node("clarification_patch", clarification_patch_node)
-    graph.add_node("followup_patch", followup_patch_node)
-    graph.add_node("followup_plan", followup_plan_node)
-    graph.add_node("merge_clarification_patch", merge_clarification_patch_node)
-    graph.add_node("merge_followup_patch", merge_followup_patch_node)
-    graph.add_node("llm_plan_query", llm_plan_query_node)
-    graph.add_node("resolve_company", resolve_company_node)
-    graph.add_node("map_metric", map_metric_node)
-    graph.add_node("check_slots", check_slots_node)
-    graph.add_node("generate_point_sql", generate_point_sql_node)
-    graph.add_node("generate_trend_sql", generate_trend_sql_node)
-    graph.add_node("generate_derived_trend_sql", generate_derived_trend_sql_node)
-    graph.add_node("generate_yoy_sql", generate_yoy_sql_node)
-    graph.add_node("generate_derived_yoy_sql", generate_derived_yoy_sql_node)
-    graph.add_node("generate_derived_sql", generate_derived_sql_node)
-    graph.add_node("generate_compare_sql", generate_compare_sql_node)
-    graph.add_node("generate_derived_compare_sql", generate_derived_compare_sql_node)
-    graph.add_node("generate_compare_trend_sql", generate_compare_trend_sql_node)
-    graph.add_node("generate_derived_compare_trend_sql", generate_derived_compare_trend_sql_node)
-    graph.add_node("generate_compare_yoy_sql", generate_compare_yoy_sql_node)
-    graph.add_node("generate_derived_compare_yoy_sql", generate_derived_compare_yoy_sql_node)
-    graph.add_node("generate_ranking_sql", generate_ranking_sql_node)
-    graph.add_node("generate_yoy_ranking_sql", generate_yoy_ranking_sql_node)
-    graph.add_node("generate_trend_ranking_sql", generate_trend_ranking_sql_node)
-    graph.add_node("generate_rank_position_sql", generate_rank_position_sql_node)
-    graph.add_node("generate_unsupported_answer", generate_unsupported_answer_node)
-    graph.add_node("build_clarification_response", build_clarification_response_node)
-    graph.add_node("review_and_execute_sql", review_and_execute_sql_node)
-    graph.add_node("llm_insight", llm_insight_node)
-    graph.add_node("assemble_final_answer", assemble_final_answer_node)
-    graph.add_node("analyze_trend", analyze_trend_node)
-    graph.add_node("analyze_yoy", analyze_yoy_node)
-    graph.add_node("analyze_derived_trend", analyze_derived_trend_node)
-    graph.add_node("analyze_derived_yoy", analyze_derived_yoy_node)
-    graph.add_node("analyze_derived_metric", analyze_derived_metric_node)
-    graph.add_node("analyze_compare", analyze_compare_node)
-    graph.add_node("analyze_derived_compare", analyze_derived_compare_node)
-    graph.add_node("analyze_compare_trend", analyze_compare_trend_node)
-    graph.add_node("analyze_derived_compare_trend", analyze_derived_compare_trend_node)
-    graph.add_node("analyze_compare_yoy", analyze_compare_yoy_node)
-    graph.add_node("analyze_derived_compare_yoy", analyze_derived_compare_yoy_node)
-    graph.add_node("analyze_ranking", analyze_ranking_node)
-    graph.add_node("analyze_yoy_ranking", analyze_yoy_ranking_node)
-    graph.add_node("analyze_trend_ranking", analyze_trend_ranking_node)
-    graph.add_node("analyze_rank_position", analyze_rank_position_node)
-    graph.add_node("generate_answer", generate_answer_node)
-    graph.add_node("generate_derived_answer", generate_derived_answer_node)
-    graph.add_node("generate_derived_trend_answer", generate_derived_trend_answer_node)
-    graph.add_node("generate_derived_yoy_answer", generate_derived_yoy_answer_node)
-    graph.add_node("remember_successful_query_plan", remember_successful_query_plan_node)
-
+    nodes = {"context_router": context_router_node, "merge_context": merge_context_node, "irrelevant_answer": irrelevant_answer_node, "query_planner": query_planner_node, "entity_normalization": entity_normalization_node, "query_spec_validator": query_spec_validator_node, "clarification_answer": build_clarification_response_node, "capability_boundary_answer": capability_boundary_answer_node, "capability_router": capability_router_node, "deterministic_sql_builder": deterministic_sql_builder_node, "sql_guard": sql_guard_node, "semantic_validate": semantic_validate_node, "execute_sql": execute_sql_node, "deterministic_result_analyzer": deterministic_result_analyzer_node, "fixed_answer_renderer": fixed_answer_renderer_node, "llm_insight": llm_insight_node_adapter, "flexible_sql_spec_builder": flexible_sql_spec_builder_node, "llm_sql_generator": llm_sql_generator_node, "llm_sql_repair": llm_sql_repair_node_adapter, "controlled_failure": controlled_failure_node, "dry_run": dry_run_node, "result_contract_builder": result_contract_builder_node, "deterministic_table": deterministic_table_node, "llm_narrative": llm_narrative_node, "answer_assembler": answer_assembler_node, "answer_validator": answer_validator_node, "remember_successful_plan": remember_successful_query_plan_node}
+    for name, node in nodes.items(): graph.add_node(name, traced_node(name, node))
     graph.add_edge(START, "context_router")
-    graph.add_conditional_edges("context_router", route_after_context_router, {
-        "llm_plan_query": "llm_plan_query",
-        "clarification_patch": "clarification_patch",
-        "followup_patch": "followup_patch",
-        "followup_plan": "followup_plan",
-        "build_clarification_response": "build_clarification_response",
-    })
-    graph.add_conditional_edges("clarification_patch", route_after_patch_node, {"merge_clarification_patch": "merge_clarification_patch", "merge_followup_patch": "merge_followup_patch", "build_clarification_response": "build_clarification_response"})
-    graph.add_conditional_edges("followup_patch", route_after_patch_node, {"merge_clarification_patch": "merge_clarification_patch", "merge_followup_patch": "merge_followup_patch", "build_clarification_response": "build_clarification_response"})
-    graph.add_conditional_edges("merge_clarification_patch", should_end_after_plan, {"resolve_company": "resolve_company", "build_clarification_response": "build_clarification_response"})
-    graph.add_conditional_edges("merge_followup_patch", should_end_after_plan, {"resolve_company": "resolve_company", "build_clarification_response": "build_clarification_response"})
-    graph.add_conditional_edges("followup_plan", should_end_after_plan, {"resolve_company": "resolve_company", "build_clarification_response": "build_clarification_response"})
-    graph.add_conditional_edges("llm_plan_query", should_end_after_plan, {"resolve_company": "resolve_company", "build_clarification_response": "build_clarification_response"})
-    graph.add_edge("resolve_company", "map_metric")
-    graph.add_edge("map_metric", "check_slots")
-    graph.add_conditional_edges("check_slots", should_end_after_slot_check, {
-        "generate_point_sql": "generate_point_sql", "generate_trend_sql": "generate_trend_sql",
-        "generate_derived_trend_sql": "generate_derived_trend_sql", "generate_yoy_sql": "generate_yoy_sql",
-        "generate_derived_yoy_sql": "generate_derived_yoy_sql", "generate_derived_sql": "generate_derived_sql",
-        "generate_compare_sql": "generate_compare_sql", "generate_derived_compare_sql": "generate_derived_compare_sql",
-        "generate_compare_trend_sql": "generate_compare_trend_sql", "generate_derived_compare_trend_sql": "generate_derived_compare_trend_sql",
-        "generate_compare_yoy_sql": "generate_compare_yoy_sql", "generate_derived_compare_yoy_sql": "generate_derived_compare_yoy_sql",
-        "generate_ranking_sql": "generate_ranking_sql", "generate_yoy_ranking_sql": "generate_yoy_ranking_sql",
-        "generate_trend_ranking_sql": "generate_trend_ranking_sql",
-        "generate_rank_position_sql": "generate_rank_position_sql",
-        "generate_unsupported_answer": "generate_unsupported_answer",
-        "build_clarification_response": "build_clarification_response",
-        "generate_answer": "generate_answer",
-    })
-
-    sql_nodes = [
-        "generate_point_sql", "generate_trend_sql", "generate_derived_trend_sql", "generate_yoy_sql",
-        "generate_derived_yoy_sql", "generate_derived_sql", "generate_compare_sql", "generate_derived_compare_sql",
-        "generate_compare_trend_sql", "generate_derived_compare_trend_sql", "generate_compare_yoy_sql",
-        "generate_derived_compare_yoy_sql", "generate_ranking_sql", "generate_yoy_ranking_sql",
-        "generate_trend_ranking_sql",
-        "generate_rank_position_sql",
-        "generate_unsupported_answer",
-    ]
-    for node_name in sql_nodes:
-        graph.add_conditional_edges(node_name, should_end_after_sql_generation, {"review_and_execute_sql": "review_and_execute_sql", "build_clarification_response": "build_clarification_response"})
-
-    graph.add_conditional_edges("review_and_execute_sql", route_analysis, {
-        "analyze_yoy": "analyze_yoy", "analyze_derived_yoy": "analyze_derived_yoy",
-        "analyze_derived_metric": "analyze_derived_metric", "analyze_derived_trend": "analyze_derived_trend",
-        "analyze_trend": "analyze_trend", "analyze_compare": "analyze_compare",
-        "analyze_derived_compare": "analyze_derived_compare", "analyze_compare_trend": "analyze_compare_trend",
-        "analyze_derived_compare_trend": "analyze_derived_compare_trend", "analyze_compare_yoy": "analyze_compare_yoy",
-        "analyze_derived_compare_yoy": "analyze_derived_compare_yoy", "analyze_ranking": "analyze_ranking",
-        "analyze_yoy_ranking": "analyze_yoy_ranking", "analyze_trend_ranking": "analyze_trend_ranking",
-        "analyze_rank_position": "analyze_rank_position",
-    })
-
-    for node_name in [
-        "analyze_compare",
-        "analyze_derived_compare",
-        "analyze_compare_trend",
-        "analyze_derived_compare_trend",
-        "analyze_compare_yoy",
-        "analyze_derived_compare_yoy",
-        "analyze_yoy",
-        "analyze_trend",
-        "analyze_ranking",
-        "analyze_yoy_ranking",
-        "analyze_trend_ranking",
-        "analyze_rank_position",
-        "analyze_derived_trend",
-        "analyze_derived_yoy",
-        "analyze_derived_metric",
-    ]:
-        graph.add_edge(node_name, "generate_answer")
-    graph.add_edge("generate_derived_answer", "remember_successful_query_plan")
-    graph.add_edge("generate_derived_trend_answer", "remember_successful_query_plan")
-    graph.add_edge("generate_derived_yoy_answer", "remember_successful_query_plan")
-    graph.add_edge("build_clarification_response", END)
-    graph.add_edge("generate_answer", "llm_insight")
-    graph.add_edge("llm_insight", "assemble_final_answer")
-    graph.add_edge("assemble_final_answer", "remember_successful_query_plan")
-    graph.add_edge("remember_successful_query_plan", END)
+    graph.add_conditional_edges("context_router", route_after_context_router_target, {"merge_context":"merge_context","irrelevant_answer":"irrelevant_answer","query_planner":"query_planner","clarification_answer":"clarification_answer"})
+    graph.add_edge("merge_context", "entity_normalization"); graph.add_edge("query_planner", "entity_normalization"); graph.add_edge("entity_normalization", "query_spec_validator")
+    graph.add_conditional_edges("query_spec_validator", route_after_query_spec_validator, {"clarification_answer":"clarification_answer","capability_boundary_answer":"capability_boundary_answer","capability_router":"capability_router"})
+    graph.add_conditional_edges("capability_router", route_after_capability_router, {"deterministic_sql_builder":"deterministic_sql_builder","flexible_sql_spec_builder":"flexible_sql_spec_builder","clarification_answer":"clarification_answer","capability_boundary_answer":"capability_boundary_answer"})
+    graph.add_edge("deterministic_sql_builder", "sql_guard"); graph.add_conditional_edges("flexible_sql_spec_builder", route_after_flexible_sql_spec, {"llm_sql_generator":"llm_sql_generator","controlled_failure":"controlled_failure"}); graph.add_conditional_edges("llm_sql_generator", route_after_llm_sql_generator, {"sql_guard":"sql_guard","controlled_failure":"controlled_failure"}); graph.add_edge("llm_sql_repair", "sql_guard")
+    graph.add_conditional_edges("sql_guard", route_after_sql_guard, {"execute_sql":"execute_sql","semantic_validate":"semantic_validate","llm_sql_repair":"llm_sql_repair","controlled_failure":"controlled_failure"})
+    graph.add_conditional_edges("semantic_validate", route_after_semantic_validate, {"dry_run":"dry_run","llm_sql_repair":"llm_sql_repair","controlled_failure":"controlled_failure"})
+    graph.add_conditional_edges("dry_run", route_after_dry_run, {"execute_sql":"execute_sql","controlled_failure":"controlled_failure","llm_sql_repair":"llm_sql_repair"})
+    graph.add_conditional_edges("execute_sql", route_after_execute_sql, {"deterministic_result_analyzer":"deterministic_result_analyzer","result_contract_builder":"result_contract_builder"})
+    graph.add_edge("deterministic_result_analyzer", "fixed_answer_renderer"); graph.add_edge("fixed_answer_renderer", "llm_insight"); graph.add_edge("llm_insight", "remember_successful_plan")
+    graph.add_edge("result_contract_builder", "deterministic_table"); graph.add_edge("result_contract_builder", "llm_narrative"); graph.add_edge("deterministic_table", "answer_assembler"); graph.add_edge("llm_narrative", "answer_assembler"); graph.add_edge("answer_assembler", "answer_validator"); graph.add_edge("answer_validator", "llm_insight"); graph.add_edge("llm_insight", "remember_successful_plan")
+    for name in ("clarification_answer","irrelevant_answer","capability_boundary_answer","controlled_failure","remember_successful_plan"): graph.add_edge(name, END)
     return LoggedCompiledGraph(graph.compile())
 
 
 app = build_graph()
-
-
-if __name__ == "__main__":
-    result = app.invoke({"user_question": "华润三九近五年营业收入趋势如何？"})
-    print(result["final_answer"])
-    print("\n")
-    print(json.dumps(result.get("query_plan"), ensure_ascii=False, indent=2))
+compiled_graph = app.compiled_graph

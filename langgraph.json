@@ -1,0 +1,10 @@
+{
+    "graphs": {
+        "agent": "./agent/graph.py:compiled_graph"
+    },
+    "dependencies": [
+        "."
+    ],
+    "env": ".env",
+    "python_version": "3.12"
+}

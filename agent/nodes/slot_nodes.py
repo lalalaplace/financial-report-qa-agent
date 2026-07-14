@@ -26,6 +26,7 @@ from agent.nodes.slot_validators import yoy_validator
 from agent.nodes.slot_validators import derived_validator
 from agent.nodes.slot_validators import trend_validator
 from agent.nodes.slot_validators import point_validator
+from agent.nodes.global_structured_query_detector import is_global_structured_query, mark_global_structured_query
 
 
 def _collect_companies(mentions: list[str]) -> tuple[list[dict[str, Any]], list[str]]:
@@ -58,6 +59,14 @@ def resolve_company_node(state: AgentState) -> dict:
 
     if company_mentions:
         candidates, unresolved, ambiguous = _collect_companies(company_mentions)
+    elif state.get("company_source") == "all_companies" or is_global_structured_query(state):
+        return {
+            "companies": [],
+            "company_candidates": [],
+            "company_resolution_status": "not_required",
+            "company_source": "all_companies",
+            "is_global_structured_query": True,
+        }
     elif intent_type in ("ranking_query", "yoy_ranking_query", "trend_ranking_query"):
         return {
             "companies": [],
@@ -76,6 +85,15 @@ def resolve_company_node(state: AgentState) -> dict:
             "companies": candidates if status == "resolved" else [],
             "company_candidates": [] if status == "resolved" else candidates,
             "company_resolution_status": status,
+        }
+
+    # 两个及以上公司文本均唯一命中时，它们是多个明确实体而非同一实体的候选项。
+    # 即使上游意图暂未归类，也不能生成“你指的是哪家公司”的错误澄清。
+    if len(candidates) >= 2 and not ambiguous and not unresolved:
+        return {
+            "companies": candidates,
+            "company_candidates": [],
+            "company_resolution_status": "resolved_multiple",
         }
 
     if len(candidates) == 1 and not ambiguous and not unresolved:
@@ -174,7 +192,49 @@ def check_slots_node(state: AgentState) -> dict:
     if pre:
         return pre
 
+    query_spec = state.get("query_spec") if isinstance(state.get("query_spec"), dict) else {}
+    if query_spec.get("execution_mode") == "flexible_sql":
+        metrics = state.get("metrics") or []
+        metric_candidates = state.get("metric_candidates") or []
+        metric_precheck = common.company_metric_precheck(
+            state.get("companies") or [],
+            state.get("company_candidates") or [],
+            metrics,
+            metric_candidates,
+            {
+                **state,
+                "company_source": state.get("company_source") or "all_companies",
+                "is_global_structured_query": state.get("is_global_structured_query", True),
+            },
+        )
+        if metric_precheck:
+            return normalize_clarification_result(metric_precheck, state)
+
+        if state.get("report_year") is None:
+            return normalize_clarification_result(
+                {
+                    "need_clarification": True,
+                    "clarification_question": "请补充查询年份。",
+                    "business_success": False,
+                    "error_type": "missing_year",
+                    "empty_fields": ["year"],
+                },
+                state,
+            )
+
+        return {
+            "need_clarification": False,
+            "business_success": None,
+            "empty_fields": [],
+            "company_source": state.get("company_source") or "all_companies",
+            "is_global_structured_query": state.get("is_global_structured_query", True),
+            "force_llm_sql": True,
+        }
+
     intent_type = state.get("intent_type") or DEFAULT_QUERY_TYPE
+    global_query_marker = mark_global_structured_query(state)
+    if global_query_marker:
+        state = {**state, **global_query_marker}
 
     # 2. 排名查询
     if intent_type == "ranking_query":
@@ -200,7 +260,7 @@ def check_slots_node(state: AgentState) -> dict:
     metrics = state.get("metrics") or []
     metric_candidates = state.get("metric_candidates") or []
 
-    pre = common.company_metric_precheck(companies, company_candidates, metrics, metric_candidates)
+    pre = common.company_metric_precheck(companies, company_candidates, metrics, metric_candidates, state)
     if pre:
         return normalize_clarification_result(pre, state)
 
@@ -211,13 +271,13 @@ def check_slots_node(state: AgentState) -> dict:
     warnings = list(state.get("warnings") or [])
 
     if intent_type == "yoy_query":
-        return normalize_clarification_result(yoy_validator.validate(state, report_period, warnings), state)
+        return {**global_query_marker, **normalize_clarification_result(yoy_validator.validate(state, report_period, warnings), state)}
     if intent_type == "derived_metric_query":
-        return normalize_clarification_result(derived_validator.validate(state, report_period, warnings), state)
+        return {**global_query_marker, **normalize_clarification_result(derived_validator.validate(state, report_period, warnings), state)}
     if intent_type == "trend_query":
-        return normalize_clarification_result(trend_validator.validate(state, report_period, warnings), state)
+        return {**global_query_marker, **normalize_clarification_result(trend_validator.validate(state, report_period, warnings), state)}
 
-    return normalize_clarification_result(point_validator.validate(state, report_period, warnings), state)
+    return {**global_query_marker, **normalize_clarification_result(point_validator.validate(state, report_period, warnings), state)}
 
 
 __all__ = ['_collect_companies', 'resolve_company_node', '_normalize_metric', 'map_metric_node', 'check_slots_node']

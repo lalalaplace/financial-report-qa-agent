@@ -61,6 +61,35 @@ def _yoy_plan() -> dict[str, Any]:
     return plan
 
 
+def test_contextual_followup_uses_shared_planner_with_inherited_plan(monkeypatch: pytest.MonkeyPatch) -> None:
+    state = {
+        "user_question": "同比呢",
+        "last_successful_query_plan": _point_plan(),
+    }
+    payloads = iter(
+        [
+            {"route_type": "contextual_followup", "target_context": "last_successful_query_plan"},
+            _followup_payload(_yoy_plan(), "基于上一轮计划切换为同比查询。"),
+        ]
+    )
+    monkeypatch.setattr(
+        context_llm_nodes,
+        "invoke_json_prompt",
+        lambda _prompt: next(payloads),
+    )
+
+    routed = context_router_node(state)
+    result = followup_plan_node({**state, **routed})
+
+    assert routed["route_type"] == "contextual_followup"
+    assert result["intent_type"] == "yoy_query"
+    assert result["company_mentions"] == ["华润三九"]
+    assert result["metric_mentions"] == ["营业收入"]
+    assert result["report_year"] == 2024
+    assert result["query_spec"]["operation"] == "yoy_query"
+    assert result["query_spec"]["execution_mode"] == "deterministic"
+
+
 def _followup_payload(query_plan: dict[str, Any], reason: str = "测试生成下一轮 QueryPlan。") -> dict[str, Any]:
     return {
         "followup_action": "plan_and_run",

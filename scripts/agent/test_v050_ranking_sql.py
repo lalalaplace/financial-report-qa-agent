@@ -147,8 +147,8 @@ def test_derived_ranking_sql_uses_nullif():
         rank_direction="desc",
         limit=10,
     )
-    assert "NULLIF(CAST(i2.operating_revenue AS DOUBLE), 0)" in sql
-    assert "DOUBLE" in sql
+    assert "NULLIF(CAST(i2.operating_revenue AS NUMERIC), 0)" in sql
+    assert "NUMERIC" in sql
 
 
 def test_derived_ranking_sql_has_secondary_sort():

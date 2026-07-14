@@ -7,18 +7,19 @@ from typing import Dict, List
 
 import psycopg2
 
-from db_config import get_db_config
 
-
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 OUTPUT_DIR = PROJECT_ROOT / "output" / "pdf_extraction" / "validation"
 KNOWN_OLD_PREFIXES = [
-    prefix.strip()
-    for prefix in os.getenv("KNOWN_OLD_REPORT_PREFIXES", "").split(";")
-    if prefix.strip()
-]
+    ]
 EXAMPLE_LIMIT = 20
 
 
@@ -120,5 +121,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-
-

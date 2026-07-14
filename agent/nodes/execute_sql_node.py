@@ -16,10 +16,11 @@ from agent.nodes.execute_sql_handlers import (
     handle_compare_sqls,
     handle_derived_compare_sqls,
     handle_single_sql,
+    execute_approved_sql,
 )
 
 
-def review_and_execute_sql_node(state: AgentState) -> dict:
+def review_and_execute_sql_node(state: AgentState, *, execution: dict | None = None) -> dict:
     if state.get("need_clarification"):
         return {}
 
@@ -74,7 +75,12 @@ def review_and_execute_sql_node(state: AgentState) -> dict:
         return handle_derived_compare_sqls(derived_compare_sqls)
 
     # 11. 单 SQL
-    return handle_single_sql(state.get("sql"))
+    return handle_single_sql((execution or {}).get("generated_sql") if execution is not None else state.get("sql"))
 
 
-__all__ = ["_invoke_execute_financial_sql", "review_and_execute_sql_node"]
+def execute_partitioned_sql_node(execution: dict) -> dict:
+    """正式主图执行入口，只消费 execution.generated_sql。"""
+    return execute_approved_sql(execution.get("generated_sql"))
+
+
+__all__ = ["_invoke_execute_financial_sql", "execute_partitioned_sql_node", "review_and_execute_sql_node"]

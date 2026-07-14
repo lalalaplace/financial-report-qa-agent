@@ -22,7 +22,8 @@ CREATE TABLE attachment3_extract_result (
     value_text TEXT,
     source_page_range VARCHAR(50),
     source_text TEXT,
-    extract_method VARCHAR(50),   -- rule / rule_candidate_fill / manual_backfill
+    extract_method VARCHAR(50),   -- rule / llm / hybrid
+    llm_status VARCHAR(50),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 

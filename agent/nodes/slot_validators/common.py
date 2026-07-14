@@ -2,6 +2,7 @@
 
 from agent.constants import DEFAULT_QUERY_TYPE, COMPARE_INTENTS
 from agent.services.compare_service import _compare_spec_payload
+from agent.nodes.global_structured_query_detector import is_global_structured_query
 
 
 def passthrough_clarification(state: dict) -> dict | None:
@@ -24,9 +25,13 @@ def company_metric_precheck(
     company_candidates: list,
     metrics: list,
     metric_candidates: list,
+    state: dict | None = None,
 ) -> dict | None:
     """非对比类查询的公共公司/指标预检。返回 None 表示通过。"""
-    if not companies and len(company_candidates) > 1:
+    state = state or {}
+    allow_global_scope = is_global_structured_query(state)
+
+    if not companies and len(company_candidates) > 1 and not allow_global_scope:
         candidate_text = "\n".join(
             f"{i}. {c['stock_abbr']}"
             for i, c in enumerate(company_candidates, start=1)
@@ -39,7 +44,7 @@ def company_metric_precheck(
             "empty_fields": [],
         }
 
-    if not companies and not company_candidates:
+    if not companies and not company_candidates and not allow_global_scope:
         return {
             "need_clarification": True,
             "clarification_question": "请说明你要查询的公司，可以提供公司简称、全称或 6 位股票代码。",

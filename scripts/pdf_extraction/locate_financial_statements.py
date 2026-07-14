@@ -1,11 +1,10 @@
 import argparse
+import os
 import json
 from pathlib import Path
 from typing import Dict, List, Optional, Sequence
 
 import psycopg2
-
-from db_config import get_db_config
 from psycopg2.extras import execute_values
 
 from parse_pdf_pages import load_or_parse_pdf_pages
@@ -21,7 +20,13 @@ from statement_table_schema import (
 from statement_locator_quality import formal_statement_page_score, is_formal_statement_candidate
 
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 LOCATOR_METHOD = "rule_title_match_v2"
@@ -1344,5 +1349,4 @@ def locate_statement_candidates(file_id: int, pages: Sequence[Dict], statement_t
 
 if __name__ == "__main__":
     main()
-
 

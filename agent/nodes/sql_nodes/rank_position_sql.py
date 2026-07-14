@@ -89,8 +89,8 @@ def build_derived_rank_position_sql(
 
     if num_table == den_table:
         safe_division = (
-            f"ROUND(CAST({num_alias}.{num_field} AS DOUBLE) "
-            f"/ NULLIF(CAST({num_alias}.{den_field} AS DOUBLE), 0), 8)"
+            f"ROUND(CAST({num_alias}.{num_field} AS NUMERIC) "
+            f"/ NULLIF(CAST({num_alias}.{den_field} AS NUMERIC), 0), 8)"
         )
         from_clause = f"""
         FROM company_dim c
@@ -106,8 +106,8 @@ def build_derived_rank_position_sql(
         period_expr = f"{num_alias}.report_period"
     else:
         safe_division = (
-            f"ROUND(CAST({num_alias}.{num_field} AS DOUBLE) "
-            f"/ NULLIF(CAST({den_alias}.{den_field} AS DOUBLE), 0), 8)"
+            f"ROUND(CAST({num_alias}.{num_field} AS NUMERIC) "
+            f"/ NULLIF(CAST({den_alias}.{den_field} AS NUMERIC), 0), 8)"
         )
         from_clause = f"""
         FROM company_dim c

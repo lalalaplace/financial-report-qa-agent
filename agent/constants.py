@@ -2,6 +2,7 @@
 
 DEFAULT_REPORT_PERIOD = "FY"
 DEFAULT_QUERY_TYPE = "single_metric_query"
+MAX_LLM_SQL_REPAIR_ATTEMPTS = 1
 TABLE_ALIASES = {
     "balance_sheet": "b",
     "income_sheet": "i",

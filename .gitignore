@@ -1,48 +1,38 @@
 # Python 缓存
 __pycache__/
 *.py[cod]
-*$py.class
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
 
-# 虚拟环境
+# 本地环境与临时文件
+.env
 .venv/
 venv/
-env/
+*.tmp
+*.bak
 
-# 本地配置和密钥
+# 批量输入数据与 PDF 原件
+input/reports/
+示例数据/
+数据/
+*.pdf
+
+# 批量运行产物和缓存；稳定版本需要的单轮报告可用 git add -f 指定
+output/
+logs/
+
+# GitHub 展示补充规则
+.pytest_cache/
+.cache/
+.ipynb_checkpoints/
 .env
 .env.*
 !.env.example
-
-# 原始数据、真实附件和运行产物
-input/
-output/
-logs/
+.claude/
 示例数据/
-*.pdf
-*.xlsx
-*.xls
-*.jsonl
-
-# 数据库和中间文件
+数据/
+*.log
 *.db
 *.sqlite
 *.sqlite3
 *.duckdb
 *.db-journal
 *.parquet
-*.tmp
-*.bak
-
-# 旧版或本地整理目录
-github_clean_repo/
-github_ready_repo/
-.claude/
-
-# 编辑器和系统文件
-.idea/
-.vscode/
-.DS_Store
-Thumbs.db

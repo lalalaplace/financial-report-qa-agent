@@ -1,5 +1,23 @@
 # Agent 执行链路说明
 
+> 当前正式链路以 `agent/graph.py` 的双通道主图为准：`QuerySpec -> capability_router -> 确定性 SQL / 受控灵活 SQL`。本文后续仍保留的 `llm_plan_query -> generate_*_sql` 节点说明用于兼容历史模块定位，不代表当前主图编排。完整当前架构见 [architecture.md](architecture.md)。
+
+## 当前双通道主图
+
+```text
+context_router
+  -> merge_context / query_planner
+  -> entity_normalization -> query_spec_validator -> capability_router
+  -> deterministic_sql_builder -> sql_guard -> execute_sql -> 固定回答
+  -> flexible_sql_spec_builder -> llm_sql_generator -> sql_guard -> semantic_validate -> dry_run -> execute_sql
+     -> result_contract_builder -> deterministic_table + llm_narrative
+     -> answer_assembler -> answer_validator
+```
+
+- 确定性通道只使用已注册 SQL 构建器。
+- 灵活 SQL 通道仅处理三类正式支持能力：多条件同比筛选与排序、两个明确 Top N 的单次交集、已注册公式派生指标的筛选或排序。系统先生成不可变 SemanticSQLContract；候选 SQL 必须经过白名单、合同校验、试运行和最多一次修复。
+- 多步骤复合任务的底层模块尚未接入该主图，不能作为当前正式能力。
+
 ## 结论
 
 当前 Agent 是一条受控的 LangGraph 执行链路，不是“自然语言直接转 SQL”的自由问答系统。
@@ -7,7 +25,7 @@
 核心原则：
 
 - LLM 只输出 `QueryPlan`、`route`、`slot_patch` 或结果补充洞察。
-- LLM 不直接写 SQL。
+- LLM 默认不直接写 SQL；只有模板缺失、QueryPlan 已校验、指标字段已由字典映射、任务属于 Flexible SQL V1 正式支持范围且为白名单内只读分析时，才允许按语义合同生成候选 SQL。
 - LLM 不修改查询结果，不重新计算财务数值。
 - SQL 不由自然语言自由生成。
 - 不允许文本转 SQL fallback。
@@ -271,4 +289,4 @@ QueryPlan
 - analyze 和 answer 节点负责基于结果组织回答。
 - llm_insight 节点只在成功查询后补充解释边界，不影响主查询结果。
 
-这条链路的关键点是：不存在自然语言到 SQL 的自由 fallback，也不存在 LLM 直接写 SQL 的执行路径。
+这条链路的关键点是：不存在自然语言到 SQL 的自由 fallback。受控 LLM SQL 节点只接收结构化 SQL 需求、不可变语义合同和白名单 schema，不能接收原始自然语言问题；输出后必须通过 SQL Guard、合同校验和试运行。嵌套 Top N、多阶段集合运算、自由派生公式和来源不明确的跨表查询直接返回 `UNSUPPORTED_FLEXIBLE_SQL`，不会执行候选 SQL。

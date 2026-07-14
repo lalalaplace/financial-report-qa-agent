@@ -396,6 +396,21 @@ def handle_single_sql(sql: str | None) -> dict[str, Any]:
     }
 
 
+def execute_approved_sql(sql: str | None) -> dict[str, Any]:
+    """执行已由正式 Guard 节点批准的单条 SQL。"""
+    if not sql:
+        return {
+            "sql_success": False,
+            "business_success": False,
+            "error_type": "sql_execution_error",
+            "empty_fields": [],
+            "query_result": {"success": False, "columns": [], "rows": [], "row_count": 0, "error": "SQL is empty."},
+        }
+    result = _invoke_execute_financial_sql(sql)
+    sql_success = bool(result.get("success"))
+    return {"query_result": result, "sql_success": sql_success, "error_type": None if sql_success else "sql_execution_error"}
+
+
 __all__ = [
     "_invoke_execute_financial_sql",
     "handle_yoy_sqls",
@@ -408,5 +423,6 @@ __all__ = [
     "handle_derived_compare_trend_sqls",
     "handle_compare_sqls",
     "handle_derived_compare_sqls",
+    "execute_approved_sql",
     "handle_single_sql",
 ]

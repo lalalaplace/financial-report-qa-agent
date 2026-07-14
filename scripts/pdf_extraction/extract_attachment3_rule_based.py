@@ -1,4 +1,4 @@
-﻿import argparse
+import argparse
 import csv
 import faulthandler
 import json
@@ -14,8 +14,6 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 import psycopg2
-
-from db_config import get_db_config
 from psycopg2.extras import execute_values
 
 from attachment3_targeted_field_rules import (
@@ -32,12 +30,13 @@ from attachment3_targeted_field_rules import (
 )
 from statement_table_schema import ColumnSchema, NormalizedRow, NormalizedTable, compact_text, infer_balance_sheet_col_role, load_normalized_table_json, normalize_item_name, normalize_text
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {"host": "localhost", "port": 5432, "dbname": "teddy_b", "user": "postgres", "password": os.environ["DB_PASSWORD"]}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATEMENT_JSON_DIR = PROJECT_ROOT / "output" / "pdf_extraction" / "statement_json"
 RUN_HISTORY_PATH = PROJECT_ROOT / "output" / "runtime" / "run_history.csv"
 RUN_SUMMARY_DIR = PROJECT_ROOT / "output" / "runtime" / "logs"
 TARGETED_FAILURE_DEBUG_DIR = RUN_SUMMARY_DIR / "targeted_failures"
+RAW_BLOCK_JSON_DIR = PROJECT_ROOT / "output" / "deprecated" / "json"
 EXTRACT_WATCHDOG_ENV = "ATTACHMENT3_EXTRACT_WATCHDOG_SECONDS"
 RULE_METHOD = "rule"
 RULE_CANDIDATE_FILL_METHOD = "rule_candidate_fill"
@@ -207,6 +206,7 @@ EXTRA_FIELD_DEFINITIONS = {
 
 NON_FINANCIAL_FIELD_CODES = {"report_year", "report_period", "stock_code", "stock_abbr", "file_id", "company_id", "serial_number"}
 METADATA_FIELD_NAMES = {"stock_code", "stock_abbr", "serial_number", "report_year", "report_period", "file_id", "company_id"}
+RAW_BLOCK_TEXT_CACHE: Dict[int, List[Dict]] = {}
 
 CANDIDATE_FILL_WHITELIST = {
     "balance_sheet": {
@@ -1059,6 +1059,37 @@ def collect_targeted_window_numbers(
     return collected[0], "current"
 
 
+def load_raw_block_texts(file_id: int) -> List[Dict]:
+    cached = RAW_BLOCK_TEXT_CACHE.get(file_id)
+    if cached is not None:
+        return cached
+    path = RAW_BLOCK_JSON_DIR / f"file_{file_id}_blocks.json"
+    if not path.exists():
+        RAW_BLOCK_TEXT_CACHE[file_id] = []
+        return []
+    try:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+    except Exception:
+        RAW_BLOCK_TEXT_CACHE[file_id] = []
+        return []
+    blocks = payload.get("blocks") or []
+    normalized_blocks: List[Dict] = []
+    for block in blocks:
+        text = normalize_text(block.get("text") or "")
+        if not text:
+            continue
+        normalized_blocks.append(
+            {
+                "block_id": block.get("block_id"),
+                "page_start": block.get("page_start"),
+                "page_end": block.get("page_end"),
+                "text": text,
+            }
+        )
+    RAW_BLOCK_TEXT_CACHE[file_id] = normalized_blocks
+    return normalized_blocks
+
+
 def is_targeted_fragment_match(field_code: str, merged_text: str) -> bool:
     compact_text_value = compact_row_label(merged_text)
     if not compact_text_value:
@@ -1098,6 +1129,41 @@ def is_targeted_fragment_match_v2(field_code: str, merged_text: str) -> bool:
         if alias_compact.startswith(compact_text_value) and len(alias_compact) - len(compact_text_value) <= 2:
             return True
     return False
+
+
+def extract_targeted_block_text_numbers(
+    file_id: int,
+    field_code: str,
+    primary_role: str,
+) -> Tuple[Optional[str], Optional[int], str, str]:
+    if field_code not in {
+        "cash_flow.operating_cf_cash_from_sales",
+        "cash_flow.financing_cf_cash_from_borrowing",
+        "cash_flow.financing_cf_cash_for_debt_repayment",
+    }:
+        return None, None, "", ""
+    for block in load_raw_block_texts(file_id):
+        lines = split_page_text_lines(block.get("text") or "")
+        if not lines:
+            continue
+        for start_index in range(len(lines)):
+            merged_parts: List[str] = []
+            for end_index in range(start_index, min(len(lines), start_index + 8)):
+                merged_parts.append(lines[end_index])
+                merged_text = merge_fragment_row_labels(*merged_parts)
+                if not is_targeted_fragment_match_v2(field_code, merged_text):
+                    continue
+                value_text, value_role = collect_targeted_window_numbers(
+                    lines=lines,
+                    window_start_index=start_index,
+                    window_end_index=end_index,
+                    primary_role=primary_role,
+                    max_scan_lines=16,
+                )
+                if value_text:
+                    page_no = block.get("page_start") if block.get("page_start") == block.get("page_end") else block.get("page_start")
+                    return value_text, page_no, merged_text, f"targeted_block_text_{value_role}"
+    return None, None, "", ""
 
 
 def is_specific_alias_for_context(field_code: str, alias: str) -> bool:
@@ -1412,6 +1478,64 @@ def build_candidate_from_targeted_page_text(field: Dict, table: Dict, payload: N
             "column_role_warning": "",
             "allow_previous_period_fallback": False,
             "fill_stage": "rule_targeted_page_text",
+        },
+    }
+
+
+def build_candidate_from_targeted_block_text(field: Dict, table: Dict, payload: NormalizedTable) -> Optional[Dict]:
+    value_text, source_page, matched_alias, resolution = extract_targeted_block_text_numbers(
+        file_id=int(payload.file_id or 0),
+        field_code=field["field_code"],
+        primary_role=field.get("preferred_role") or "current_period",
+    )
+    if not value_text:
+        return None
+    scaled_value = scale_value_text(
+        value_text=value_text,
+        unit_multiplier=table["unit_multiplier"],
+        is_ratio=is_ratio_field(field["field_code"]),
+    )
+    numeric_value = parse_decimal(scaled_value)
+    if numeric_value is None and not is_ratio_field(field["field_code"]):
+        return None
+    confidence = 0.84
+    return {
+        "target_table": field["target_table"],
+        "field_code": field["field_code"],
+        "field_name_cn": field["field_name_cn"],
+        "value_text": scaled_value,
+        "numeric_value": numeric_value,
+        "row_id": -1,
+        "raw_line_name": matched_alias,
+        "normalized_line_name": normalize_row_label(matched_alias),
+        "source_page": source_page,
+        "source_column_role": field.get("preferred_role") or "current_period",
+        "column_label": f"context:{resolution}",
+        "unit": table.get("unit") or "元",
+        "confidence": confidence,
+        "source_page_range": str(source_page) if source_page is not None else "",
+        "source_text": f"matched_alias={matched_alias}\nvalue_text={value_text}\nresolution={resolution}",
+        "candidate_rank": 0,
+        "candidate_score": confidence,
+        "extract_method": RULE_METHOD,
+        "extra_info_json": {
+            "statement_type": table["statement_type"],
+            "unit": table.get("unit"),
+            "currency": table.get("currency"),
+            "matched_alias": matched_alias,
+            "matched_variant": normalize_row_label(matched_alias),
+            "row_match_score": 84.0,
+            "column_role_policy": {
+                "primary_role": field.get("preferred_role") or "current_period",
+                "allow_previous_fallback": False,
+                "fallback_requires_opt_in": False,
+                "primary_column": None,
+                "fallback_column": None,
+            },
+            "used_fallback_role": False,
+            "column_role_warning": "",
+            "allow_previous_period_fallback": False,
+            "fill_stage": "rule_targeted_block_text",
         },
     }
 
@@ -3424,7 +3548,7 @@ def choose_rule_stage(candidates: List[Dict]) -> Tuple[str, Optional[Dict], Dict
         return "rule", top1, meta
     if top1_confidence >= AUTO_FILL_MIN_CONFIDENCE and gap >= AUTO_FILL_MIN_GAP:
         return "candidate_fill", top1, meta
-    return "needs_rule_fallback", None, meta
+    return "needs_rerank", None, meta
 
 
 def get_candidate_source_row_id(candidate: Dict) -> Optional[int]:
@@ -3498,7 +3622,6 @@ def annotate_suspicious_equity_candidates(candidates_by_field: Dict[str, List[Di
             extra_info["risk_reason"] = "equity_total_equity 等于 asset_total_assets，且行名不是明确权益合计"
             candidate["confidence"] = min(float(candidate.get("confidence") or 0.0), 0.49)
             candidate["candidate_score"] = min(float(candidate.get("candidate_score") or 0.0), 0.49)
-
 
 
 def is_exactish_alias_match(candidate: Dict) -> bool:
@@ -3577,7 +3700,6 @@ def fallback_to_rule_candidate(field: Dict, ordered: List[Dict], stage_meta: Dic
     return apply_selection_method(top1, RULE_METHOD, "rule_fallback", stage_meta), ""
 
 
-
 def apply_selection_method(candidate: Dict, method: str, fill_stage: str, extra_meta: Dict) -> Dict:
     row = dict(candidate)
     extra_info = dict(row.get("extra_info_json") or {})
@@ -3648,9 +3770,9 @@ def choose_best_candidates(
         fallback_row, failure_reason = fallback_to_rule_candidate(field, ordered, stage_meta)
         if fallback_row is not None:
             final_rows.append(fallback_row)
-            decision_logs.append({"field_code": field_code, "decision": "rule_fallback", **stage_meta})
+            decision_logs.append({"field_code": field_code, "decision": "fallback_rule_candidate", **stage_meta})
         else:
-            decision_logs.append({"field_code": field_code, "decision": "weak_match", "failure_reason": failure_reason, **stage_meta, **top_candidate_meta})
+            decision_logs.append({"field_code": field_code, "decision": "candidate_rejected", "failure_reason": failure_reason, **stage_meta, **top_candidate_meta})
     return final_rows, decision_logs
 
 
@@ -3785,6 +3907,11 @@ def process_single_json(
                 candidates_by_field[field["field_code"]] = [targeted_page_text_candidate]
                 field_state_map[field["field_code"]] = field_state
                 continue
+            targeted_block_text_candidate = build_candidate_from_targeted_block_text(field, table, payload)
+            if targeted_block_text_candidate is not None:
+                candidates_by_field[field["field_code"]] = [targeted_block_text_candidate]
+                field_state_map[field["field_code"]] = field_state
+                continue
             diagnostic = build_not_found_diagnostic(field, table, row_matches=None, rejected_by_guardrail=False)
             early_decision_logs.append({"field_code": field["field_code"], "decision": "not_found", "failure_reason": "not_found", **diagnostic})
             continue
@@ -3817,6 +3944,11 @@ def process_single_json(
             targeted_page_text_candidate = build_candidate_from_targeted_page_text(field, table, payload)
             if targeted_page_text_candidate is not None:
                 candidates_by_field[field["field_code"]] = [targeted_page_text_candidate]
+                field_state_map[field["field_code"]] = field_state
+                continue
+            targeted_block_text_candidate = build_candidate_from_targeted_block_text(field, table, payload)
+            if targeted_block_text_candidate is not None:
+                candidates_by_field[field["field_code"]] = [targeted_block_text_candidate]
                 field_state_map[field["field_code"]] = field_state
                 continue
             failure_reason = choose_failure_reason(field_state["failure_reasons"], "invalid_after_validation")
@@ -4133,5 +4265,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-

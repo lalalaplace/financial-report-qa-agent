@@ -116,6 +116,12 @@ def _iter_sql_entries(state: dict[str, Any]) -> list[dict[str, Any]]:
 
 
 def _sql_review_passed(state: dict[str, Any]) -> bool | None:
+    sql_guard_status = state.get("sql_guard_status")
+    if sql_guard_status == "passed":
+        return True
+    if sql_guard_status == "rejected":
+        return False
+
     sql_review = state.get("sql_review")
     if isinstance(sql_review, dict) and "is_safe" in sql_review:
         return bool(sql_review.get("is_safe"))

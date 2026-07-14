@@ -1,9 +1,8 @@
 from pathlib import Path
 
+import os
 import pandas as pd
 import psycopg2
-
-from db_config import get_db_config
 from psycopg2.extras import execute_values
 
 # ========= 配置说明 =========
@@ -11,10 +10,8 @@ from psycopg2.extras import execute_values
 #    指向“附件3：数据库-表名及字段说明.xlsx”的实际路径。
 #    默认使用当前项目下的 input/attachment/附件3：数据库-表名及字段说明.xlsx。
 #
-# 2. 配置数据库连接：
-#    不要在代码中填写数据库账号或密码。
-#    请通过 DATABASE_URL 或 DB_HOST / DB_PORT / DB_NAME / DB_USER / DB_PASSWORD
-#    环境变量配置 PostgreSQL 连接；也可以复制 .env.example 为 .env 后填写本地配置。
+# 2. 修改 DB_CONFIG：
+#    按你的 PostgreSQL 实际连接信息填写 host、port、dbname、user、password。
 #    本脚本只负责导入 attachment3_field_dict，不负责建表。
 #
 # 3. 运行方式：
@@ -24,7 +21,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 
 EXCEL_PATH = PROJECT_ROOT / "input" / "attachment" / "附件3：数据库-表名及字段说明.xlsx"
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 SHEET_TABLE_MAPPING = {
     "核心业绩指标表": "core_performance",
@@ -167,4 +170,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

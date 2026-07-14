@@ -1,4 +1,5 @@
 import argparse
+import os
 import json
 import re
 import sys
@@ -9,13 +10,17 @@ from pathlib import Path
 from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 import psycopg2
-
-from db_config import get_db_config
 from psycopg2 import sql
 from psycopg2.extras import execute_values
 
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 STATEMENT_JSON_DIR = PROJECT_ROOT / "output" / "pdf_extraction" / "statement_json"
 LINEAGE_SOURCE_TABLE = "attachment3_extract_result"
@@ -1583,4 +1588,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

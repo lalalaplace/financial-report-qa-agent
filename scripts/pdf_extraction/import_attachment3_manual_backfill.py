@@ -1,4 +1,5 @@
 import argparse
+import os
 import csv
 import json
 import sys
@@ -7,10 +8,14 @@ from typing import Dict, List, Optional, Tuple
 
 import psycopg2
 
-from db_config import get_db_config
 
-
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 EXTRACT_METHOD = "manual_backfill"
 SKIP_FINAL_FIELD_NAMES = {
@@ -370,4 +375,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     sys.exit(main())
-

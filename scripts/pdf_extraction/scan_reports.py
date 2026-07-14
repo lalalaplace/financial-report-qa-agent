@@ -5,12 +5,16 @@ from pathlib import Path
 from typing import Optional
 
 import psycopg2
-
-from db_config import get_db_config
 from psycopg2.extras import execute_values
 
 
-DB_CONFIG = get_db_config()
+DB_CONFIG = {
+    "host": "localhost",
+    "port": 5432,
+    "dbname": "teddy_b",
+    "user": "postgres",
+    "password": os.environ["DB_PASSWORD"],
+}
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 REPORT_ROOT = PROJECT_ROOT / "input" / "reports"
@@ -661,4 +665,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

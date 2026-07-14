@@ -40,9 +40,9 @@ def build_base_yoy_ranking_sql(
         {curr_alias}.{field} AS current_value,
         {prev_alias}.{field} AS previous_value,
         (
-            CAST({curr_alias}.{field} AS DOUBLE)
-            - CAST({prev_alias}.{field} AS DOUBLE)
-        ) / NULLIF(CAST({prev_alias}.{field} AS DOUBLE), 0) AS yoy_rate
+            CAST({curr_alias}.{field} AS DOUBLE PRECISION)
+            - CAST({prev_alias}.{field} AS DOUBLE PRECISION)
+        ) / NULLIF(CAST({prev_alias}.{field} AS DOUBLE PRECISION), 0) AS yoy_rate
     FROM {table} {curr_alias}
     JOIN {table} {prev_alias}
         ON {curr_alias}.stock_code = {prev_alias}.stock_code

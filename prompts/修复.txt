@@ -1,0 +1,122 @@
+当前最关键的判断
+
+现在不应该继续修：
+
+SQL Prompt；
+Repair Prompt；
+Guard 函数白名单；
+ResultContract；
+Answer Validator；
+CompositePlan。
+
+下一步应只针对 Planner 做收敛。
+
+建议按以下顺序处理：
+
+1. 单独测试 Planner
+
+脱离 LangGraph、数据库和 Flexible SQL，只运行：
+
+复杂问题
+→ Planner
+→ QuerySpec
+
+记录：
+
+请求开始时间；
+首 token 时间；
+完整响应时间；
+finish_reason；
+thinking 是否开启；
+输入 token；
+输出 token；
+是否命中硬超时。
+
+先确认 Planner 单节点能否稳定完成六条复杂问题。
+
+2. Planner 关闭长推理
+
+Planner 当前只需输出结构化 QuerySpec，不需要生成解释性长文本。
+
+建议：
+
+关闭 thinking；
+使用结构化输出；
+限制输出 token；
+缩短 Prompt；
+删除与 Planner 无关的 SQL、回答和架构规则。
+
+Planner 只负责：
+
+识别查询语义
+→ 输出 QuerySpec
+
+不应在 Planner 中提前推导 SQL 实现细节。
+
+3. 检查 context_router 是否造成重复 LLM 调用
+
+如果新查询链路是：
+
+context_router LLM
+→ Planner LLM
+
+那么每个问题至少需要连续两次模型调用。
+
+对于明确的新问题，可以考虑：
+
+context_router 使用轻量模型；
+context_router 使用规则优先；
+无历史上下文时直接进入 Planner；
+只有存在历史对话时才调用 context_router LLM。
+
+这不是为复杂案例绕过流程，而是减少不必要的前置模型依赖。
+
+4. 给 Planner 单独配置模型和预算
+
+不要与 SQL Generator 共用全局配置。
+
+例如：
+
+AGENT_PLANNER_TIMEOUT_SECONDS=45
+AGENT_PLANNER_MAX_TOKENS=1000
+AGENT_PLANNER_THINKING_ENABLED=false
+
+Planner 与 SQL Generator 的最佳模型配置不一定相同。
+
+5. Planner 稳定后再恢复完整 E2E
+
+先要求六条问题都能稳定输出合法 QuerySpec，再运行：
+
+Planner
+→ Flexible SQL
+→ 完整端到端
+
+否则每次完整 E2E 都只是在重复验证 Planner 超时。
+
+能否通过离线 QuerySpec 验收先收尾
+
+这取决于你的版本定位。
+
+如果你要宣称：
+
+当前版本支持真实自然语言 Flexible SQL 查询
+
+那么不能跳过 Planner，必须完成真实 Planner E2E。
+
+如果你把当前版本边界调整为：
+
+Flexible SQL 下游执行链已完成，但自然语言 Planner 的线上稳定性暂未达标
+
+那么可以把 Flexible SQL 下游作为技术预览，但不能把完整 Flexible SQL 能力标记为已交付。
+
+更合理的选择是暂不降低项目能力声明，先解决 Planner。
+
+最终总结
+
+当前一直无法收尾，不是因为 Flexible SQL 后续模块反复修不好，而是因为：
+
+所有真实复杂案例都在 Planner 阶段超时；
+后续 SQL、Repair、ResultContract 从未被触发；
+此前多轮修复集中在下游，未解决真实阻塞点；
+硬超时只解决悬挂，不解决 Planner 成功率；
+在 Planner 稳定生成 QuerySpec 前，Flexible SQL 无法进行端到端语义验收。

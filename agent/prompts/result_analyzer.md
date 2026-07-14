@@ -26,6 +26,7 @@
 - company_compare_query：重点说明当前指标的对比口径。例如营业收入是规模对比，净利率是盈利效率对比，资产负债率是资本结构对比；不要扩展为公司整体好坏。
 - ranking_query / rank_position_query：重点说明排名基于当前数据库样本范围；不要说成全市场或行业排名，除非输入明确给出该口径。interpretation_boundary 不应为空。
 - derived_metric_query：重点说明指标含义和解释边界；不要做风险、质量或投资判断。
+- Flexible SQL：重点说明结果只在 QuerySpec 已声明的年份、报告期、筛选、排序、限制和样本范围内成立；不得补充 SQL 未表达的原因或事实。可建议在同一已注册指标范围内调整阈值、排序或比较相关已注册指标。
 
 输出要求：
 - 只输出 JSON，不要输出 Markdown 或额外解释。

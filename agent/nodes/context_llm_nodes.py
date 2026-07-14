@@ -12,11 +12,13 @@ from agent.schemas.clarification import build_clarification_payload
 from agent.schemas.query_plan import validate_plan
 from agent.services.clarification_followup import build_clarification_context_from_state
 from agent.services.llm_json_service import invoke_json_prompt
+from agent.schemas.state_sections import error_update
 from agent.services.query_plan_merge_service import (
     clear_execution_state_after_merge,
     merge_query_plan,
     validate_slot_patch,
 )
+from agent.nodes.global_structured_query_detector import has_out_of_scope_signal
 
 
 PROMPT_DIR = Path(__file__).resolve().parents[1] / "prompts"
@@ -158,6 +160,62 @@ def _state_from_plan(plan: dict[str, Any]) -> dict[str, Any]:
         "change_metric": plan.get("change_metric"),
         "need_clarification": plan.get("need_clarification", False),
         "clarification_question": plan.get("clarification_reason"),
+    }
+
+
+def _query_spec_from_plan(plan: dict[str, Any]) -> dict[str, Any] | None:
+    """将上下文续问生成的旧 QueryPlan 统一适配为主图所需 QuerySpec。"""
+    try:
+        normalized_plan = validate_plan(plan)
+    except (TypeError, ValueError):
+        return None
+
+    operation_map = {
+        "single_metric_query": "point_query",
+        "multi_metric_query": "multi_metric_query",
+        "trend_query": "trend_query",
+        "yoy_query": "yoy_query",
+        "derived_metric_query": "derived_metric_query",
+        "company_compare_query": "company_compare_query",
+        "company_compare_trend_query": "company_compare_trend_query",
+        "company_compare_yoy_query": "company_compare_yoy_query",
+        "ranking_query": "ranking_query",
+        "yoy_ranking_query": "yoy_ranking_query",
+        "trend_ranking_query": "trend_ranking_query",
+        "rank_position_query": "rank_position_query",
+    }
+    operation = operation_map.get(normalized_plan.get("intent_type"))
+    if operation is None:
+        return None
+
+    time_range = normalized_plan["time_range"]
+    time_scope: dict[str, Any] = {"period": normalized_plan.get("report_period") or "FY"}
+    if isinstance(time_range.get("report_year"), int):
+        time_scope["year"] = time_range["report_year"]
+    if isinstance(time_range.get("start_year"), int):
+        time_scope["start_year"] = time_range["start_year"]
+    if isinstance(time_range.get("end_year"), int):
+        time_scope["end_year"] = time_range["end_year"]
+    sort: list[dict[str, Any]] = []
+    if normalized_plan.get("rank_direction") in {"asc", "desc"}:
+        metric_mentions = normalized_plan.get("metric_mentions") or []
+        sort = [{"metric": metric_mentions[0], "direction": normalized_plan["rank_direction"]}] if metric_mentions else []
+
+    return {
+        "execution_mode": "deterministic",
+        "operation": operation,
+        "entities": normalized_plan.get("company_mentions") or [],
+        "metrics": normalized_plan.get("metric_mentions") or [],
+        "time_scope": time_scope,
+        "filters": [],
+        "sort": sort,
+        "limit": normalized_plan.get("limit"),
+        "group_by": [],
+        "set_operations": [],
+        "derived_expressions": [],
+        "answer_mode": "fixed",
+        "unsupported_reason": None,
+        "clarification_question": None,
     }
 
 
@@ -353,11 +411,20 @@ def _followup_plan_prompt(state: dict[str, Any]) -> str:
 def context_router_node(state: dict[str, Any]) -> dict[str, Any]:
     """LLM 上下文路由节点，只输出上下文关系判断。"""
     question = state.get("user_question", "")
+    # 外部能力问题仍属于 Agent 能力边界判断，必须交给后续节点标记 unsupported。
+    if has_out_of_scope_signal(state):
+        return {"route_type": "new_query", "target_context": "none", **_clear_pending_state()}
+    if not state.get("pending_query_plan") and not state.get("last_successful_query_plan"):
+        return {"route_type": "new_query", "target_context": "none", **_clear_pending_state()}
     try:
         payload = invoke_json_prompt(_router_prompt(state))
         routed = _validate_router_payload(payload)
     except Exception as exc:
-        return _unsupported_context_result(question, f"上下文路由失败：{exc}", "ambiguous")
+        result = _unsupported_context_result(question, f"上下文路由失败：{exc}", "ambiguous")
+        error_code = getattr(exc, "error_code", "CONTEXT_ROUTER_FAILED")
+        if isinstance(error_code, str) and error_code.endswith("_TIMEOUT"):
+            return {**result, "error_type": error_code, **error_update("context_router", error_code, str(exc), retryable=True)}
+        return result
 
     route_type = routed["route_type"]
     target_context = routed["target_context"]
@@ -495,6 +562,16 @@ def followup_plan_node(state: dict[str, Any]) -> dict[str, Any]:
         normalized_plan = followup_result["query_plan"]
         result = clear_execution_state_after_merge({})
         result.update(_state_from_plan(normalized_plan))
+        query_spec = _query_spec_from_plan(normalized_plan)
+        if query_spec is None:
+            return _followup_plan_clarification_result(
+                followup_action="invalid",
+                question=question,
+                message="续问计划无法转换为可执行查询，请重新描述完整问题。",
+                error_type="invalid_query",
+                reason="QueryPlan 未映射到 QuerySpec operation",
+            )
+        result["query_spec"] = query_spec
         result["merged_query_plan"] = normalized_plan
         result["followup_result"] = {
             "followup_action": "plan_and_run",
@@ -628,6 +705,58 @@ def merge_followup_patch_node(state: dict[str, Any]) -> dict[str, Any]:
     return result
 
 
+def _context_plan_from_query_spec(state: dict[str, Any]) -> dict[str, Any] | None:
+    """为仍使用 QueryPlan 的续问链路构造兼容的成功查询上下文。"""
+    spec = state.get("query_spec")
+    if not isinstance(spec, dict) or spec.get("execution_mode") != "deterministic":
+        return None
+
+    operation = spec.get("operation")
+    operation_to_intent = {
+        "point_query": "single_metric_query",
+        "multi_metric_query": "multi_metric_query",
+        "trend_query": "trend_query",
+        "yoy_query": "yoy_query",
+        "derived_metric_query": "derived_metric_query",
+        "company_compare_query": "company_compare_query",
+        "company_compare_trend_query": "company_compare_trend_query",
+        "company_compare_yoy_query": "company_compare_yoy_query",
+        "ranking_query": "ranking_query",
+        "yoy_ranking_query": "yoy_ranking_query",
+        "trend_ranking_query": "trend_ranking_query",
+        "rank_position_query": "rank_position_query",
+    }
+    intent_type = operation_to_intent.get(operation)
+    if intent_type is None:
+        return None
+
+    metric_mentions = state.get("metric_mentions")
+    company_mentions = state.get("company_mentions")
+    time_range = state.get("time_range")
+    if not isinstance(metric_mentions, list) or not isinstance(company_mentions, list) or not isinstance(time_range, dict):
+        return None
+    sort = spec.get("sort") if isinstance(spec.get("sort"), list) else []
+    first_sort = sort[0] if sort and isinstance(sort[0], dict) else {}
+    try:
+        return validate_plan(
+            {
+                "intent_type": intent_type,
+                "company_mentions": company_mentions,
+                "metric_mentions": metric_mentions,
+                "report_period": state.get("report_period") or "FY",
+                "time_range": time_range,
+                "compare_spec": None,
+                "rank_direction": first_sort.get("direction"),
+                "limit": spec.get("limit"),
+                "change_metric": None,
+                "need_clarification": False,
+                "clarification_reason": None,
+            }
+        )
+    except (TypeError, ValueError):
+        return None
+
+
 def remember_successful_query_plan_node(state: dict[str, Any]) -> dict[str, Any]:
     """成功回答后保存可供下一轮上下文追问使用的 QueryPlan。"""
     if state.get("business_success") is not True:
@@ -637,6 +766,8 @@ def remember_successful_query_plan_node(state: dict[str, Any]) -> dict[str, Any]
     if state.get("error_type"):
         return {}
     query_plan = state.get("query_plan")
+    if not isinstance(query_plan, dict):
+        query_plan = _context_plan_from_query_spec(state)
     if not isinstance(query_plan, dict):
         return {}
     return {"last_successful_query_plan": query_plan}

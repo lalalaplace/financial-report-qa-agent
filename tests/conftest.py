@@ -1,9 +1,8 @@
-"""测试路径配置。"""
+"""测试环境不创建真实 LLM 子进程；硬超时行为由专门测试覆盖。"""
 
-from pathlib import Path
-import sys
+import pytest
 
 
-PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(PROJECT_ROOT))
+@pytest.fixture(autouse=True)
+def _disable_llm_hard_timeout_in_unit_tests(monkeypatch):
+    monkeypatch.setenv("LLM_HARD_TIMEOUT_ENABLED", "0")

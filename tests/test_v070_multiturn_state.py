@@ -111,6 +111,31 @@ def test_remember_successful_query_plan_only_records_successful_business_result(
     assert missing_plan == {}
 
 
+def test_remember_successful_query_plan_builds_context_from_query_spec():
+    result = remember_successful_query_plan_node(
+        {
+            "business_success": True,
+            "query_plan": None,
+            "query_spec": {
+                "execution_mode": "deterministic",
+                "operation": "point_query",
+                "sort": [],
+                "limit": None,
+            },
+            "company_mentions": ["华润三九"],
+            "metric_mentions": ["营业收入"],
+            "report_period": "FY",
+            "time_range": _single_year(2024),
+        }
+    )
+
+    plan = result["last_successful_query_plan"]
+    assert plan["intent_type"] == "single_metric_query"
+    assert plan["company_mentions"] == ["华润三九"]
+    assert plan["metric_mentions"] == ["营业收入"]
+    assert plan["time_range"]["report_year"] == 2024
+
+
 def test_last_successful_plan_points_to_latest_success():
     """7.5 连续成功查询时 last_successful_query_plan 指向最新一次。"""
     q2_plan = _query_plan(companies=["五粮液"], metrics=["净利润"], year=2023)
