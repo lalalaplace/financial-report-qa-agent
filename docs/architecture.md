@@ -1,6 +1,6 @@
 # 系统架构说明
 
-> 2026-07-14 正式收尾状态：确定性通道与 Flexible SQL V1 的能力边界、执行合同和受控失败路径均已固化。历史六例单轮结果 1/6（`output/dual_channel_e2e/result_20260714_103304.summary.json`）仅用于问题追溯，不再作为 V1 的验收口径。
+> 2026-07-14 正式收尾状态：确定性通道与 Flexible SQL V1 的能力边界、执行合同和受控失败路径均已固化。当前验收口径见 [Flexible SQL V1 验收边界](flexible_sql_v1_acceptance.md)。
 
 ## 结论
 
