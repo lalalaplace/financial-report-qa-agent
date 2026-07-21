@@ -40,19 +40,7 @@ LLM 不直接读取整份 PDF，也不自由生成财务数值。最终答案中
 
 ## 系统架构
 
-```text
-用户问题
-  -> Context Router
-  -> Query Planner（QueryPlan / QuerySpec）
-  -> 公司标准化 / 指标映射 / 槽位校验
-  -> Capability Router
-       ├─ 确定性 SQL：固定 SQL Builder
-       └─ Flexible SQL：语义合同 -> 受控 LLM SQL
-                         -> SQL Guard / 合同校验 / 试运行
-  -> Read-only Executor
-  -> Result Contract / 确定性表格 / 受控摘要
-  -> 最终回答
-```
+![流程图](D:\Desktop\已结束项目\dify\数据导入\docs\流程图.png)
 
 - **确定性通道：** 已注册查询由固定 SQL 节点构建，保证常见财务问数稳定可复现。
 - **Flexible SQL 通道：** 仅接收结构化规格与不可变语义合同；候选 SQL 必须通过白名单、只读限制、合同校验和试运行。
